@@ -1,0 +1,19 @@
+[package]
+name = "instant-rpc"
+version = "0.1.0"
+edition = "2021"
+description = "Historical-only Solana JSON-RPC server backed by Old Faithful HTTP/2 Range requests"
+
+[dependencies]
+bytes = "1"
+fastrand = "2"
+httpdate = "1"
+lru = "0.12"
+reqwest = { version = "0.12", default-features = false, features = ["http2", "rustls-tls"] }
+thiserror = "2"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time"] }
+tracing = "0.1"
+url = "2"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }
