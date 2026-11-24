@@ -30,10 +30,11 @@ pub use old_faithful::{
 pub use proto::{
     decode_rewards_bytes, decode_rewards_frame, decode_transaction_status_meta_bytes,
     decode_transaction_status_meta_frame, decompress_zstd, DecodedRewards, ProtoDecodeError,
-    BINCODE_EPOCH_CUTOFF, BINCODE_SLOT_CUTOFF,
+    BINCODE_EPOCH_CUTOFF, BINCODE_SLOT_CUTOFF, MAX_DECOMPRESSED_BYTES,
 };
 pub use rpc::{
-    build_router, error_codes, parse_block_encoding, parse_signature, parse_transaction_encoding,
-    GetBlockParams, GetTransactionParams, JsonRpcError, JsonRpcRequest, JsonRpcResponse, RpcState,
-    DEFAULT_BLOCKHASH_CACHE_CAPACITY,
+    build_router, build_router_with_limits, error_codes, parse_block_encoding, parse_signature,
+    parse_transaction_encoding, GetBlockParams, GetTransactionParams, JsonRpcError, JsonRpcRequest,
+    JsonRpcResponse, RpcState, DEFAULT_BLOCKHASH_CACHE_CAPACITY, DEFAULT_MAX_BATCH_SIZE,
+    DEFAULT_MAX_REQUEST_BODY_BYTES,
 };

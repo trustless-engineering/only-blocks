@@ -38,6 +38,12 @@ pub const BINCODE_EPOCH_CUTOFF: u64 = 157;
 /// First slot of Epoch 157 (`157 * 432_000 = 67_824_000`).
 pub const BINCODE_SLOT_CUTOFF: u64 = BINCODE_EPOCH_CUTOFF * SLOTS_PER_EPOCH;
 
+/// Maximum uncompressed payload size accepted from a single zstd frame (512 MiB).
+///
+/// Safely accommodates ~55 MiB compressed epoch-boundary reward blocks while preventing
+/// unbounded memory allocation from corrupted or malicious zstd decompression bombs.
+pub const MAX_DECOMPRESSED_BYTES: usize = 512 * 1024 * 1024;
+
 /// Errors returned while decoding Solana transaction status metadata or block rewards.
 #[derive(Debug, Error)]
 pub enum ProtoDecodeError {
@@ -336,7 +342,7 @@ impl From<ProtoReward> for Reward {
                 .commission_bps
                 .parse::<u16>()
                 .ok()
-                .map(|bps| (bps / 100) as u8)
+                .and_then(|bps| u8::try_from(bps / 100).ok())
         });
         Self {
             pubkey: reward.pubkey,
@@ -506,19 +512,22 @@ impl TryFrom<ProtoTransactionStatusMeta> for TransactionStatusMeta {
 }
 
 /// Format an integer token amount with `decimals` decimal places, trimming trailing zeros
-/// (matches `solana_account_decoder::parse_token::real_number_string_trimmed`).
+/// (matches `solana_account_decoder::parse_token::real_number_string_trimmed` and safely
+/// handles all `decimals: u8` values `0..=255` without `10u64.pow` overflow).
 pub(crate) fn real_number_string_trimmed(amount: u64, decimals: u8) -> String {
-    let mut s = if decimals > 0 {
-        let left = amount / 10u64.pow(u32::from(decimals));
-        let right = amount % 10u64.pow(u32::from(decimals));
-        format!("{left}.{right:0width$}", width = usize::from(decimals))
-    } else {
-        amount.to_string()
-    };
-    if s.contains('.') {
-        let trimmed = s.trim_end_matches('0').trim_end_matches('.');
-        s.truncate(trimmed.len());
+    if decimals == 0 {
+        return amount.to_string();
     }
+    let digits = amount.to_string();
+    let dec = usize::from(decimals);
+    let mut s = if digits.len() <= dec {
+        format!("0.{:0>width$}", digits, width = dec)
+    } else {
+        let split = digits.len() - dec;
+        format!("{}.{}", &digits[..split], &digits[split..])
+    };
+    let trimmed = s.trim_end_matches('0').trim_end_matches('.');
+    s.truncate(trimmed.len());
     s
 }
 
@@ -526,14 +535,27 @@ pub(crate) fn real_number_string_trimmed(amount: u64, decimals: u8) -> String {
 // Public entry points (zstd + Epoch 157 split)
 // ---------------------------------------------------------------------------
 
-/// Decompress a zstd-compressed slice into a `Vec<u8>`.
+/// Decompress a zstd-compressed slice into a `Vec<u8>`, enforcing [`MAX_DECOMPRESSED_BYTES`].
 pub fn decompress_zstd(data: &[u8]) -> Result<Vec<u8>, ProtoDecodeError> {
-    let mut decoder =
-        zstd::Decoder::new(data).map_err(|e| ProtoDecodeError::Zstd(e.to_string()))?;
+    decompress_zstd_with_limit(data, MAX_DECOMPRESSED_BYTES)
+}
+
+/// Decompress a zstd-compressed slice with an explicit maximum output byte cap.
+pub(crate) fn decompress_zstd_with_limit(
+    data: &[u8],
+    max_bytes: usize,
+) -> Result<Vec<u8>, ProtoDecodeError> {
+    let decoder = zstd::Decoder::new(data).map_err(|e| ProtoDecodeError::Zstd(e.to_string()))?;
+    let mut limited = decoder.take((max_bytes as u64).saturating_add(1));
     let mut out = Vec::new();
-    decoder
+    limited
         .read_to_end(&mut out)
         .map_err(|e| ProtoDecodeError::Zstd(e.to_string()))?;
+    if out.len() > max_bytes {
+        return Err(ProtoDecodeError::Zstd(format!(
+            "decompressed payload exceeds maximum allowed size ({max_bytes} bytes)"
+        )));
+    }
     Ok(out)
 }
 
@@ -1075,6 +1097,52 @@ mod tests {
         assert_eq!(real_number_string_trimmed(1_000_000, 6), "1");
         assert_eq!(real_number_string_trimmed(1_250_000, 6), "1.25");
         assert_eq!(real_number_string_trimmed(5, 6), "0.000005");
+        assert_eq!(real_number_string_trimmed(0, 6), "0");
         assert_eq!(real_number_string_trimmed(42, 0), "42");
+        // Decimals >= 20 must not overflow u64::pow.
+        assert_eq!(real_number_string_trimmed(1, 20), "0.00000000000000000001");
+        assert_eq!(real_number_string_trimmed(0, 255), "0");
+        assert_eq!(
+            real_number_string_trimmed(u64::MAX, 20),
+            "0.18446744073709551615"
+        );
+    }
+
+    #[test]
+    fn decompress_zstd_enforces_upper_bound() {
+        let payload = vec![0x41u8; 4096];
+        let compressed = zstd_compress(&payload);
+
+        let ok = decompress_zstd_with_limit(&compressed, 4096).expect("exact limit ok");
+        assert_eq!(ok.len(), 4096);
+
+        let err = decompress_zstd_with_limit(&compressed, 1024).expect_err("over limit rejected");
+        assert!(matches!(err, ProtoDecodeError::Zstd(_)));
+        assert!(err.to_string().contains("exceeds maximum"));
+    }
+
+    #[test]
+    fn proto_reward_commission_bps_rejects_out_of_range_values() {
+        let valid: Reward = ProtoReward {
+            pubkey: "11111111111111111111111111111111".to_string(),
+            lamports: 10,
+            post_balance: 20,
+            reward_type: 3,
+            commission: String::new(),
+            commission_bps: "750".to_string(),
+        }
+        .into();
+        assert_eq!(valid.commission, Some(7));
+
+        let overflow: Reward = ProtoReward {
+            pubkey: "11111111111111111111111111111111".to_string(),
+            lamports: 10,
+            post_balance: 20,
+            reward_type: 3,
+            commission: String::new(),
+            commission_bps: "30000".to_string(),
+        }
+        .into();
+        assert_eq!(overflow.commission, None);
     }
 }

@@ -4,7 +4,7 @@ use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
 
 use axum::body::Bytes;
-use axum::extract::State;
+use axum::extract::{DefaultBodyLimit, State};
 use axum::http::header::CONTENT_TYPE;
 use axum::http::{HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
@@ -30,11 +30,18 @@ use crate::rpc::types::{
 /// 100,000 entries (~64 bytes each) take ~6–8 MiB of RAM with zero disk writes.
 pub const DEFAULT_BLOCKHASH_CACHE_CAPACITY: usize = 100_000;
 
+/// Default maximum HTTP request body size accepted by the JSON-RPC server (1 MiB).
+pub const DEFAULT_MAX_REQUEST_BODY_BYTES: usize = 1024 * 1024;
+
+/// Default maximum number of requests allowed in a single JSON-RPC batch array.
+pub const DEFAULT_MAX_BATCH_SIZE: usize = 100;
+
 /// Shared state for the JSON-RPC server.
 #[derive(Clone)]
 pub struct RpcState {
     client: OldFaithfulClient,
     blockhash_cache: Option<Arc<Mutex<LruCache<u64, String>>>>,
+    max_batch_size: usize,
 }
 
 impl RpcState {
@@ -54,7 +61,19 @@ impl RpcState {
         Self {
             client,
             blockhash_cache,
+            max_batch_size: DEFAULT_MAX_BATCH_SIZE,
         }
+    }
+
+    /// Return a copy of [`RpcState`] with an explicit JSON-RPC batch size limit (clamped to `>= 1`).
+    pub fn with_max_batch_size(mut self, max_batch_size: usize) -> Self {
+        self.max_batch_size = max_batch_size.max(1);
+        self
+    }
+
+    /// Configured maximum number of items accepted in a single JSON-RPC batch array.
+    pub fn max_batch_size(&self) -> usize {
+        self.max_batch_size
     }
 
     /// Access the underlying [`OldFaithfulClient`].
@@ -205,6 +224,14 @@ impl RpcState {
 
     /// Dispatch a single parsed JSON-RPC 2.0 request.
     pub async fn dispatch_request(&self, req: JsonRpcRequest) -> JsonRpcResponse {
+        if !matches!(req.id, Value::Null | Value::String(_) | Value::Number(_)) {
+            return JsonRpcResponse::err(
+                Value::Null,
+                JsonRpcError::invalid_request(
+                    "Invalid Request: id must be a string, number, or null",
+                ),
+            );
+        }
         let id = req.id;
 
         if req.jsonrpc.as_deref() != Some("2.0") {
@@ -224,7 +251,18 @@ impl RpcState {
         debug!(method = %method, "dispatching JSON-RPC request");
 
         match method.as_str() {
-            "getHealth" => JsonRpcResponse::ok(id, Value::String("ok".to_string())),
+            "getHealth" => match req.params.as_ref() {
+                None | Some(Value::Null) => {
+                    JsonRpcResponse::ok(id, Value::String("ok".to_string()))
+                }
+                Some(Value::Array(arr)) if arr.is_empty() => {
+                    JsonRpcResponse::ok(id, Value::String("ok".to_string()))
+                }
+                _ => JsonRpcResponse::err(
+                    id,
+                    JsonRpcError::invalid_params("Invalid params: getHealth expects no parameters"),
+                ),
+            },
             "getBlock" => match GetBlockParams::from_rpc_params(req.params.as_ref()) {
                 Ok(params) => match self.handle_get_block(params).await {
                     Ok(result) => JsonRpcResponse::ok(id, result),
@@ -250,9 +288,25 @@ impl RpcState {
     }
 }
 
-/// Build the `axum` [`Router`] serving JSON-RPC 2.0 on `POST /`.
+/// Build the `axum` [`Router`] serving JSON-RPC 2.0 on `POST /` with default request limits
+/// ([`DEFAULT_MAX_REQUEST_BODY_BYTES`] and [`DEFAULT_MAX_BATCH_SIZE`]).
 pub fn build_router(state: RpcState) -> Router {
-    Router::new().route("/", post(handle_rpc)).with_state(state)
+    let max_batch_size = state.max_batch_size();
+    build_router_with_limits(state, DEFAULT_MAX_REQUEST_BODY_BYTES, max_batch_size)
+}
+
+/// Build the `axum` [`Router`] serving JSON-RPC 2.0 on `POST /` with explicit HTTP request
+/// body byte limit and JSON-RPC batch size limit.
+pub fn build_router_with_limits(
+    state: RpcState,
+    max_request_body_bytes: usize,
+    max_batch_size: usize,
+) -> Router {
+    let state = state.with_max_batch_size(max_batch_size);
+    Router::new()
+        .route("/", post(handle_rpc))
+        .layer(DefaultBodyLimit::max(max_request_body_bytes))
+        .with_state(state)
 }
 
 async fn handle_rpc(State(state): State<RpcState>, body: Bytes) -> Response {
@@ -283,6 +337,17 @@ async fn handle_rpc(State(state): State<RpcState>, body: Bytes) -> Response {
                 let resp = JsonRpcResponse::err(
                     Value::Null,
                     JsonRpcError::invalid_request("Invalid Request: empty batch"),
+                );
+                return json_response(&resp);
+            }
+            if items.len() > state.max_batch_size() {
+                let resp = JsonRpcResponse::err(
+                    Value::Null,
+                    JsonRpcError::invalid_request(format!(
+                        "Invalid Request: batch size {} exceeds maximum {}",
+                        items.len(),
+                        state.max_batch_size()
+                    )),
                 );
                 return json_response(&resp);
             }
@@ -955,5 +1020,372 @@ mod tests {
             .as_str()
             .unwrap()
             .contains("historical-only"));
+    }
+
+    #[tokio::test]
+    async fn rpc_server_hardening_jsonrpc_edge_cases_body_limit_and_batch_limit() {
+        let mock = MockOldFaithful::start(vec![], HashMap::new()).await;
+        let client = OldFaithfulClient::new(OldFaithfulConfig::with_base_url(&mock.base_url))
+            .expect("client");
+        let state = RpcState::with_blockhash_cache_capacity(client, 4);
+        let app = crate::rpc::server::build_router_with_limits(state, 512, 3);
+
+        // 1. Oversized HTTP body (> 512 bytes) rejected with 413 Payload Too Large.
+        let oversized = format!(
+            "{{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"getHealth\",\"pad\":\"{}\"}}",
+            "x".repeat(600)
+        );
+        let req = Request::builder()
+            .method(Method::POST)
+            .uri("/")
+            .header("content-type", "application/json")
+            .body(Body::from(oversized))
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), axum::http::StatusCode::PAYLOAD_TOO_LARGE);
+
+        // 2. Non-object / non-array JSON primitives -> -32600 Invalid Request.
+        for primitive in ["42", "\"hello\"", "true", "null"] {
+            let resp = rpc_post(&app, primitive).await;
+            assert_eq!(
+                resp["error"]["code"],
+                error_codes::INVALID_REQUEST,
+                "expected -32600 for {primitive}, got {resp}"
+            );
+            assert!(resp["id"].is_null());
+        }
+
+        // 3. Invalid jsonrpc version, missing method, invalid id types -> -32600.
+        for bad_req in [
+            json!({"jsonrpc": "1.0", "id": 1, "method": "getHealth"}),
+            json!({"id": 1, "method": "getHealth"}),
+            json!({"jsonrpc": 2.0, "id": 1, "method": "getHealth"}),
+            json!({"jsonrpc": "2.0", "id": 1}),
+            json!({"jsonrpc": "2.0", "id": true, "method": "getHealth"}),
+            json!({"jsonrpc": "2.0", "id": {"nested": 1}, "method": "getHealth"}),
+            json!({"jsonrpc": "2.0", "id": [1, 2], "method": "getHealth"}),
+        ] {
+            let resp = rpc_post(&app, &bad_req.to_string()).await;
+            assert_eq!(
+                resp["error"]["code"],
+                error_codes::INVALID_REQUEST,
+                "expected -32600 for {bad_req}, got {resp}"
+            );
+        }
+
+        // 4. getHealth accepts empty array / null params and rejects non-empty params with -32602.
+        let health_empty = rpc_post(
+            &app,
+            &json!({"jsonrpc": "2.0", "id": "h1", "method": "getHealth", "params": []}).to_string(),
+        )
+        .await;
+        assert_eq!(health_empty["result"], "ok");
+        assert_eq!(health_empty["id"], "h1");
+
+        let health_null = rpc_post(
+            &app,
+            &json!({"jsonrpc": "2.0", "id": "h2", "method": "getHealth", "params": null})
+                .to_string(),
+        )
+        .await;
+        assert_eq!(health_null["result"], "ok");
+
+        let health_bad = rpc_post(
+            &app,
+            &json!({"jsonrpc": "2.0", "id": "h3", "method": "getHealth", "params": [1]})
+                .to_string(),
+        )
+        .await;
+        assert_eq!(health_bad["error"]["code"], error_codes::INVALID_PARAMS);
+
+        // 5. Empty batch and oversized batch (> max_batch_size = 3) -> -32600.
+        let empty_batch = rpc_post(&app, "[]").await;
+        assert_eq!(empty_batch["error"]["code"], error_codes::INVALID_REQUEST);
+
+        let big_batch = rpc_post(
+            &app,
+            &json!([
+                {"jsonrpc": "2.0", "id": 1, "method": "getHealth"},
+                {"jsonrpc": "2.0", "id": 2, "method": "getHealth"},
+                {"jsonrpc": "2.0", "id": 3, "method": "getHealth"},
+                {"jsonrpc": "2.0", "id": 4, "method": "getHealth"}
+            ])
+            .to_string(),
+        )
+        .await;
+        assert_eq!(big_batch["error"]["code"], error_codes::INVALID_REQUEST);
+
+        // 6. Valid mixed batch (<= 3 items) returns matching array of responses.
+        let mixed_batch = rpc_post(
+            &app,
+            &json!([
+                {"jsonrpc": "2.0", "id": 1, "method": "getHealth"},
+                123,
+                {"jsonrpc": "2.0", "id": 3, "method": "unknownMethod"}
+            ])
+            .to_string(),
+        )
+        .await;
+        let arr = mixed_batch.as_array().expect("batch array response");
+        assert_eq!(arr.len(), 3);
+        assert_eq!(arr[0]["result"], "ok");
+        assert_eq!(arr[1]["error"]["code"], error_codes::INVALID_REQUEST);
+        assert_eq!(arr[2]["error"]["code"], error_codes::METHOD_NOT_FOUND);
+
+        // None of these malformed/health requests may hit Old Faithful.
+        assert_eq!(mock.request_count(), 0);
+    }
+
+    #[tokio::test]
+    async fn concurrency_soak_429_burst_bounds_inflight_and_lru_eviction() {
+        use crate::config::RetryConfig;
+        use std::time::Duration;
+
+        // Build 25 distinct slots across Epoch 700 (plus parent slot 302_400_000).
+        const BASE_SLOT: u64 = 302_400_000;
+        const SLOT_COUNT: u64 = 25;
+        let mut slots_data: HashMap<u64, Vec<u8>> = HashMap::new();
+        let mut slot_sigs: HashMap<u64, String> = HashMap::new();
+
+        for i in 0..=SLOT_COUNT {
+            let slot = BASE_SLOT + i;
+            let parent = if i == 0 { slot } else { slot - 1 };
+            let tx = sample_legacy_tx((i as u8).wrapping_add(1));
+            let sig = tx.signatures[0].to_string();
+            let car = build_synthetic_slot_car_with_options(
+                slot,
+                parent,
+                (i as u8).wrapping_add(10),
+                &[tx],
+                false,
+                false,
+            );
+            slots_data.insert(slot, car);
+            slot_sigs.insert(slot, sig);
+        }
+
+        // Pack Epoch 700 CAR and slot-ranges table.
+        let mut car_buf = Vec::new();
+        let mut slot_entries: HashMap<u64, (u64, u32)> = HashMap::new();
+        for i in 0..=SLOT_COUNT {
+            let slot = BASE_SLOT + i;
+            let slice = &slots_data[&slot];
+            let offset = car_buf.len() as u64;
+            let length = slice.len() as u32;
+            car_buf.extend_from_slice(slice);
+            slot_entries.insert(slot, (offset, length));
+        }
+
+        let car_buf = Arc::new(car_buf);
+        let slot_entries = Arc::new(slot_entries);
+        let in_flight = Arc::new(AtomicUsize::new(0));
+        let peak_in_flight = Arc::new(AtomicUsize::new(0));
+        let total_reqs = Arc::new(AtomicUsize::new(0));
+        let throttled_429 = Arc::new(AtomicUsize::new(0));
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
+        let addr = listener.local_addr().expect("local_addr");
+
+        let car_bg = Arc::clone(&car_buf);
+        let entries_bg = Arc::clone(&slot_entries);
+        let in_flight_bg = Arc::clone(&in_flight);
+        let peak_bg = Arc::clone(&peak_in_flight);
+        let total_bg = Arc::clone(&total_reqs);
+        let throttled_bg = Arc::clone(&throttled_429);
+
+        let server_handle = tokio::spawn(async move {
+            loop {
+                let Ok((mut stream, _)) = listener.accept().await else {
+                    break;
+                };
+                let car = Arc::clone(&car_bg);
+                let entries = Arc::clone(&entries_bg);
+                let in_flight = Arc::clone(&in_flight_bg);
+                let peak = Arc::clone(&peak_bg);
+                let total = Arc::clone(&total_bg);
+                let throttled = Arc::clone(&throttled_bg);
+
+                tokio::spawn(async move {
+                    let cur = in_flight.fetch_add(1, Ordering::SeqCst) + 1;
+                    peak.fetch_max(cur, Ordering::SeqCst);
+                    let req_idx = total.fetch_add(1, Ordering::SeqCst);
+
+                    let mut buf = vec![0u8; 4096];
+                    let mut filled = 0usize;
+                    loop {
+                        let Ok(n) = stream.read(&mut buf[filled..]).await else {
+                            in_flight.fetch_sub(1, Ordering::SeqCst);
+                            return;
+                        };
+                        if n == 0 {
+                            in_flight.fetch_sub(1, Ordering::SeqCst);
+                            return;
+                        }
+                        filled += n;
+                        if buf[..filled].windows(4).any(|w| w == b"\r\n\r\n") || filled == buf.len()
+                        {
+                            break;
+                        }
+                    }
+
+                    // Artificial latency so concurrent tasks contend on the semaphore.
+                    tokio::time::sleep(Duration::from_millis(8)).await;
+
+                    // Deterministic 429 burst: reject every 5th request with 429 + Retry-After: 0,
+                    // and every 13th with 503 Service Unavailable.
+                    let (status, reason, extra_header, body) = if req_idx.is_multiple_of(5) {
+                        throttled.fetch_add(1, Ordering::SeqCst);
+                        (429, "Too Many Requests", "Retry-After: 0\r\n", Vec::new())
+                    } else if req_idx % 13 == 1 {
+                        (503, "Service Unavailable", "", Vec::new())
+                    } else {
+                        let req_text = String::from_utf8_lossy(&buf[..filled]);
+                        let mut lines = req_text.lines();
+                        let first_line = lines.next().unwrap_or_default();
+                        let path = first_line
+                            .split_whitespace()
+                            .nth(1)
+                            .unwrap_or_default()
+                            .to_string();
+                        let mut range = None;
+                        for line in lines {
+                            if let Some((k, v)) = line.split_once(':') {
+                                if k.eq_ignore_ascii_case("range") {
+                                    range = Some(v.trim().to_string());
+                                }
+                            }
+                        }
+                        let parsed = range.and_then(|r| {
+                            let s = r.strip_prefix("bytes=")?;
+                            let (a, b) = s.split_once('-')?;
+                            Some((a.parse::<u64>().ok()?, b.parse::<u64>().ok()?))
+                        });
+                        match parsed {
+                            Some((start, _end)) if path.ends_with("-slot-ranges.raw") => {
+                                let slot_idx = start / SLOT_RANGE_ENTRY_BYTES;
+                                let slot = 700 * SLOTS_PER_EPOCH + slot_idx;
+                                let (off, len) = entries.get(&slot).copied().unwrap_or((0, 0));
+                                let mut entry = Vec::with_capacity(12);
+                                entry.extend_from_slice(&off.to_le_bytes());
+                                entry.extend_from_slice(&len.to_le_bytes());
+                                (206, "Partial Content", "", entry)
+                            }
+                            Some((start, end)) if path.ends_with(".car") => {
+                                let s = start as usize;
+                                let e = (end as usize).min(car.len().saturating_sub(1));
+                                (206, "Partial Content", "", car[s..=e].to_vec())
+                            }
+                            _ => (404, "Not Found", "", Vec::new()),
+                        }
+                    };
+
+                    let head = format!(
+                        "HTTP/1.1 {status} {reason}\r\n{extra_header}Content-Length: {}\r\nConnection: close\r\n\r\n",
+                        body.len()
+                    );
+                    let _ = stream.write_all(head.as_bytes()).await;
+                    let _ = stream.write_all(&body).await;
+                    let _ = stream.shutdown().await;
+
+                    in_flight.fetch_sub(1, Ordering::SeqCst);
+                });
+            }
+        });
+
+        const MAX_CONCURRENCY: usize = 4;
+        const RANGE_CACHE_CAP: usize = 8;
+        const BLOCKHASH_CACHE_CAP: usize = 6;
+
+        let cfg = OldFaithfulConfig {
+            base_url: format!("http://{addr}"),
+            max_concurrent_requests: MAX_CONCURRENCY,
+            slot_range_cache_capacity: RANGE_CACHE_CAP,
+            retry: RetryConfig {
+                max_retries: 6,
+                initial_backoff: Duration::from_millis(5),
+                max_backoff: Duration::from_millis(50),
+                jitter_ratio: 0.2,
+            },
+            ..OldFaithfulConfig::default()
+        };
+        let client = OldFaithfulClient::new(cfg).expect("client");
+        let state = RpcState::with_blockhash_cache_capacity(client.clone(), BLOCKHASH_CACHE_CAP);
+        let app = build_router(state.clone());
+
+        // Launch 50 concurrent RPC requests: 25 getBlock + 25 getTransaction across 25 distinct slots.
+        let mut tasks = Vec::new();
+        for i in 1..=SLOT_COUNT {
+            let slot = BASE_SLOT + i;
+            let app_blk = app.clone();
+            tasks.push(tokio::spawn(async move {
+                let resp = rpc_post(
+                    &app_blk,
+                    &json!({
+                        "jsonrpc": "2.0",
+                        "id": slot,
+                        "method": "getBlock",
+                        "params": [slot, { "encoding": "json", "maxSupportedTransactionVersion": 0 }]
+                    })
+                    .to_string(),
+                )
+                .await;
+                assert!(
+                    resp.get("error").is_none(),
+                    "getBlock({slot}) failed under 429 burst: {resp}"
+                );
+                assert_eq!(resp["result"]["parentSlot"], slot - 1);
+            }));
+
+            let sig = slot_sigs[&slot].clone();
+            let app_tx = app.clone();
+            tasks.push(tokio::spawn(async move {
+                let resp = rpc_post(
+                    &app_tx,
+                    &json!({
+                        "jsonrpc": "2.0",
+                        "id": format!("tx-{slot}"),
+                        "method": "getTransaction",
+                        "params": [sig, { "slot": slot, "encoding": "jsonParsed", "maxSupportedTransactionVersion": 0 }]
+                    })
+                    .to_string(),
+                )
+                .await;
+                assert!(
+                    resp.get("error").is_none(),
+                    "getTransaction({slot}) failed under 429 burst: {resp}"
+                );
+                assert_eq!(resp["result"]["slot"], slot);
+                assert_eq!(resp["result"]["transaction"]["signatures"][0], sig);
+            }));
+        }
+
+        for t in tasks {
+            t.await.expect("task completed without panic");
+        }
+
+        server_handle.abort();
+
+        let observed_peak = peak_in_flight.load(Ordering::SeqCst);
+        let observed_429 = throttled_429.load(Ordering::SeqCst);
+        assert!(
+            observed_429 >= 5,
+            "expected >= 5 injected 429 responses to exercise throttling recovery, got {observed_429}"
+        );
+        assert!(
+            observed_peak <= MAX_CONCURRENCY,
+            "expected peak in-flight concurrency <= {MAX_CONCURRENCY}, observed {observed_peak}"
+        );
+        assert!(
+            client.cache_len() <= RANGE_CACHE_CAP,
+            "slot-range RAM LRU exceeded cap {RANGE_CACHE_CAP}: {}",
+            client.cache_len()
+        );
+        assert_eq!(client.cache_len(), RANGE_CACHE_CAP);
+        assert!(
+            state.blockhash_cache_len() <= BLOCKHASH_CACHE_CAP,
+            "blockhash RAM LRU exceeded cap {BLOCKHASH_CACHE_CAP}: {}",
+            state.blockhash_cache_len()
+        );
+        assert_eq!(state.blockhash_cache_len(), BLOCKHASH_CACHE_CAP);
     }
 }

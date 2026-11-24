@@ -3,8 +3,9 @@ use std::time::Duration;
 
 use clap::Parser;
 use instant_rpc::{
-    build_router, OldFaithfulClient, OldFaithfulConfig, RetryConfig, RpcState, DEFAULT_BASE_URL,
-    DEFAULT_BLOCKHASH_CACHE_CAPACITY, DEFAULT_CONNECT_TIMEOUT, DEFAULT_MAX_CONCURRENT_REQUESTS,
+    build_router_with_limits, OldFaithfulClient, OldFaithfulConfig, RetryConfig, RpcState,
+    DEFAULT_BASE_URL, DEFAULT_BLOCKHASH_CACHE_CAPACITY, DEFAULT_CONNECT_TIMEOUT,
+    DEFAULT_MAX_BATCH_SIZE, DEFAULT_MAX_CONCURRENT_REQUESTS, DEFAULT_MAX_REQUEST_BODY_BYTES,
     DEFAULT_MAX_SLICE_BYTES, DEFAULT_REQUEST_TIMEOUT, DEFAULT_SLOT_RANGE_CACHE_CAPACITY,
 };
 use tokio::net::TcpListener;
@@ -39,6 +40,14 @@ struct Cli {
     #[arg(long, default_value_t = DEFAULT_BLOCKHASH_CACHE_CAPACITY)]
     blockhash_cache_capacity: usize,
 
+    /// Maximum HTTP request body size in bytes (default: 1 MiB).
+    #[arg(long, default_value_t = DEFAULT_MAX_REQUEST_BODY_BYTES)]
+    max_request_body_bytes: usize,
+
+    /// Maximum number of requests allowed in a single JSON-RPC batch array.
+    #[arg(long, default_value_t = DEFAULT_MAX_BATCH_SIZE)]
+    max_batch_size: usize,
+
     /// HTTP connect timeout in seconds.
     #[arg(long, default_value_t = DEFAULT_CONNECT_TIMEOUT.as_secs())]
     connect_timeout_secs: u64,
@@ -62,6 +71,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let cli = Cli::parse();
 
+    if cli.max_request_body_bytes == 0 {
+        return Err("max_request_body_bytes must be > 0".into());
+    }
+    if cli.max_batch_size == 0 {
+        return Err("max_batch_size must be > 0".into());
+    }
+
     let config = OldFaithfulConfig {
         base_url: cli.base_url,
         connect_timeout: Duration::from_secs(cli.connect_timeout_secs),
@@ -79,7 +95,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client = OldFaithfulClient::new(config)?;
     let state =
         RpcState::with_blockhash_cache_capacity(client.clone(), cli.blockhash_cache_capacity);
-    let app = build_router(state);
+    let app = build_router_with_limits(state, cli.max_request_body_bytes, cli.max_batch_size);
 
     let listener = TcpListener::bind(cli.bind).await?;
     let local_addr = listener.local_addr()?;
@@ -91,6 +107,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         max_concurrent_requests = client.config().max_concurrent_requests,
         slot_range_cache_capacity = client.cache_capacity(),
         blockhash_cache_capacity = cli.blockhash_cache_capacity,
+        max_request_body_bytes = cli.max_request_body_bytes,
+        max_batch_size = cli.max_batch_size,
         "instant-rpc JSON-RPC server listening (historical-only, zero disk downloads)"
     );
 
@@ -102,6 +120,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn shutdown_signal() {
-    let _ = tokio::signal::ctrl_c().await;
-    info!("received shutdown signal; stopping instant-rpc server");
+    let ctrl_c = async {
+        let _ = tokio::signal::ctrl_c().await;
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+            Ok(mut sigterm) => {
+                let _ = sigterm.recv().await;
+            }
+            Err(_) => std::future::pending::<()>().await,
+        }
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {
+            info!("received SIGINT; stopping instant-rpc server gracefully");
+        }
+        _ = terminate => {
+            info!("received SIGTERM; stopping instant-rpc server gracefully");
+        }
+    }
 }
