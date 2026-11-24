@@ -33,6 +33,7 @@ pub use proto::{
     BINCODE_EPOCH_CUTOFF, BINCODE_SLOT_CUTOFF,
 };
 pub use rpc::{
-    build_router, error_codes, parse_block_encoding, GetBlockParams, JsonRpcError, JsonRpcRequest,
-    JsonRpcResponse, RpcState, DEFAULT_BLOCKHASH_CACHE_CAPACITY,
+    build_router, error_codes, parse_block_encoding, parse_signature, parse_transaction_encoding,
+    GetBlockParams, GetTransactionParams, JsonRpcError, JsonRpcRequest, JsonRpcResponse, RpcState,
+    DEFAULT_BLOCKHASH_CACHE_CAPACITY,
 };

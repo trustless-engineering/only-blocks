@@ -5,6 +5,6 @@ pub mod types;
 
 pub use server::{build_router, RpcState, DEFAULT_BLOCKHASH_CACHE_CAPACITY};
 pub use types::{
-    error_codes, parse_block_encoding, GetBlockParams, JsonRpcError, JsonRpcRequest,
-    JsonRpcResponse,
+    error_codes, parse_block_encoding, parse_signature, parse_transaction_encoding, GetBlockParams,
+    GetTransactionParams, JsonRpcError, JsonRpcRequest, JsonRpcResponse,
 };

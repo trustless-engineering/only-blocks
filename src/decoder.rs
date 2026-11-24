@@ -655,6 +655,33 @@ impl<'a> CarIndex<'a> {
         })
     }
 
+    /// Decode transaction status metadata from its IPLD `DataFrame`, combining with `versioned_tx`.
+    fn decode_transaction_metadata(
+        &self,
+        slot: u64,
+        versioned_tx: VersionedTransaction,
+        metadata_df: &IpldDataFrame,
+    ) -> Result<TransactionWithStatusMeta, DecoderError> {
+        let meta_bytes = self.reassemble_dataframe(metadata_df)?;
+        match decode_transaction_status_meta_frame(slot, &meta_bytes)? {
+            Some(meta) => Ok(TransactionWithStatusMeta::Complete(
+                VersionedTransactionWithStatusMeta {
+                    transaction: versioned_tx,
+                    meta,
+                },
+            )),
+            None => match versioned_tx.clone().into_legacy_transaction() {
+                Some(legacy) => Ok(TransactionWithStatusMeta::MissingMetadata(legacy)),
+                None => Ok(TransactionWithStatusMeta::Complete(
+                    VersionedTransactionWithStatusMeta {
+                        transaction: versioned_tx,
+                        meta: Default::default(),
+                    },
+                )),
+            },
+        }
+    }
+
     /// Decode a transaction node into [`TransactionWithStatusMeta`].
     fn decode_transaction_node(
         &self,
@@ -681,24 +708,7 @@ impl<'a> CarIndex<'a> {
             ));
         }
 
-        let meta_bytes = self.reassemble_dataframe(&tx_node.metadata)?;
-        match decode_transaction_status_meta_frame(slot, &meta_bytes)? {
-            Some(meta) => Ok(TransactionWithStatusMeta::Complete(
-                VersionedTransactionWithStatusMeta {
-                    transaction: versioned_tx,
-                    meta,
-                },
-            )),
-            None => match versioned_tx.clone().into_legacy_transaction() {
-                Some(legacy) => Ok(TransactionWithStatusMeta::MissingMetadata(legacy)),
-                None => Ok(TransactionWithStatusMeta::Complete(
-                    VersionedTransactionWithStatusMeta {
-                        transaction: versioned_tx,
-                        meta: Default::default(),
-                    },
-                )),
-            },
-        }
+        self.decode_transaction_metadata(slot, versioned_tx, &tx_node.metadata)
     }
 
     /// Decode block rewards (if referenced by `block.rewards`).
@@ -944,24 +954,8 @@ pub fn decode_transaction_by_signature(
                 continue;
             }
 
-            let meta_bytes = index.reassemble_dataframe(&tx_node.metadata)?;
-            let tx_with_meta = match decode_transaction_status_meta_frame(slot, &meta_bytes)? {
-                Some(meta) => {
-                    TransactionWithStatusMeta::Complete(VersionedTransactionWithStatusMeta {
-                        transaction: versioned_tx,
-                        meta,
-                    })
-                }
-                None => match versioned_tx.clone().into_legacy_transaction() {
-                    Some(legacy) => TransactionWithStatusMeta::MissingMetadata(legacy),
-                    None => {
-                        TransactionWithStatusMeta::Complete(VersionedTransactionWithStatusMeta {
-                            transaction: versioned_tx,
-                            meta: Default::default(),
-                        })
-                    }
-                },
-            };
+            let tx_with_meta =
+                index.decode_transaction_metadata(slot, versioned_tx, &tx_node.metadata)?;
 
             return Ok(Some(ConfirmedTransactionWithStatusMeta {
                 slot,
@@ -1089,14 +1083,83 @@ pub(crate) mod test_helpers {
         }
     }
 
+    fn make_dataframe_cbor(car: &mut Vec<u8>, payload: Vec<u8>, split_frames: bool) -> CborValue {
+        if split_frames && payload.len() >= 9 {
+            let third = payload.len() / 3;
+            let two_thirds = third * 2;
+            let crc = Crc::<u64>::new(&CRC_64_GO_ISO);
+            let mut digest = crc.digest();
+            digest.update(&payload);
+            let checksum = digest.finalize();
+
+            let df2 = CborValue::Array(vec![
+                CborValue::Integer(NodeKind::DataFrame as i128),
+                CborValue::Integer(checksum as i128),
+                CborValue::Integer(2),
+                CborValue::Integer(3),
+                CborValue::Bytes(payload[two_thirds..].to_vec()),
+                CborValue::Array(vec![]),
+            ]);
+            let cid2 = push_cbor_section(car, &df2);
+
+            let df1 = CborValue::Array(vec![
+                CborValue::Integer(NodeKind::DataFrame as i128),
+                CborValue::Integer(checksum as i128),
+                CborValue::Integer(1),
+                CborValue::Integer(3),
+                CborValue::Bytes(payload[third..two_thirds].to_vec()),
+                CborValue::Array(vec![cbor_link(&cid2)]),
+            ]);
+            let cid1 = push_cbor_section(car, &df1);
+
+            CborValue::Array(vec![
+                CborValue::Integer(NodeKind::DataFrame as i128),
+                CborValue::Integer(checksum as i128),
+                CborValue::Integer(0),
+                CborValue::Integer(3),
+                CborValue::Bytes(payload[..third].to_vec()),
+                CborValue::Array(vec![cbor_link(&cid1)]),
+            ])
+        } else {
+            CborValue::Array(vec![
+                CborValue::Integer(NodeKind::DataFrame as i128),
+                CborValue::Null,
+                CborValue::Null,
+                CborValue::Null,
+                CborValue::Bytes(payload),
+                CborValue::Null,
+            ])
+        }
+    }
+
     /// Build a synthetic CARv1 slot slice with transactions (modern protobuf or pre-157 bincode)
-    /// and multi-frame rewards.
+    /// and optional multi-frame rewards.
     pub fn build_synthetic_slot_car(
         slot: u64,
         parent_slot: u64,
         blockhash_byte: u8,
         txs: &[VersionedTransaction],
         split_rewards_frames: bool,
+    ) -> Vec<u8> {
+        build_synthetic_slot_car_with_options(
+            slot,
+            parent_slot,
+            blockhash_byte,
+            txs,
+            split_rewards_frames,
+            false,
+        )
+    }
+
+    /// Build a synthetic CARv1 slot slice with optional multi-frame `DataFrame` splitting for
+    /// both rewards and transaction data/metadata payloads.
+    pub fn build_synthetic_slot_car_with_options(
+        slot: u64,
+        parent_slot: u64,
+        blockhash_byte: u8,
+        txs: &[VersionedTransaction],
+        split_rewards_frames: bool,
+        split_tx_frames: bool,
     ) -> Vec<u8> {
         let mut car = Vec::new();
         let is_pre_157 = slot < crate::proto::BINCODE_SLOT_CUTOFF;
@@ -1145,24 +1208,13 @@ pub(crate) mod test_helpers {
                 zstd::encode_all(proto.encode_to_vec().as_slice(), 1).unwrap()
             };
 
+            let data_df = make_dataframe_cbor(&mut car, tx_bytes, split_tx_frames);
+            let meta_df = make_dataframe_cbor(&mut car, meta_bytes, split_tx_frames);
+
             let tx_node = CborValue::Array(vec![
                 CborValue::Integer(NodeKind::Transaction as i128),
-                CborValue::Array(vec![
-                    CborValue::Integer(NodeKind::DataFrame as i128),
-                    CborValue::Null,
-                    CborValue::Null,
-                    CborValue::Null,
-                    CborValue::Bytes(tx_bytes),
-                    CborValue::Null,
-                ]),
-                CborValue::Array(vec![
-                    CborValue::Integer(NodeKind::DataFrame as i128),
-                    CborValue::Null,
-                    CborValue::Null,
-                    CborValue::Null,
-                    CborValue::Bytes(meta_bytes),
-                    CborValue::Null,
-                ]),
+                data_df,
+                meta_df,
                 CborValue::Integer(slot as i128),
                 CborValue::Integer(idx as i128),
             ]);
@@ -1201,41 +1253,7 @@ pub(crate) mod test_helpers {
             zstd::encode_all(proto.encode_to_vec().as_slice(), 1).unwrap()
         };
 
-        let rewards_df = if split_rewards_frames && rewards_payload.len() > 8 {
-            let mid = rewards_payload.len() / 2;
-            let crc = Crc::<u64>::new(&CRC_64_GO_ISO);
-            let mut digest = crc.digest();
-            digest.update(&rewards_payload);
-            let checksum = digest.finalize();
-
-            let cont_df = CborValue::Array(vec![
-                CborValue::Integer(NodeKind::DataFrame as i128),
-                CborValue::Integer(checksum as i128),
-                CborValue::Integer(1),
-                CborValue::Integer(2),
-                CborValue::Bytes(rewards_payload[mid..].to_vec()),
-                CborValue::Array(vec![]),
-            ]);
-            let cont_cid = push_cbor_section(&mut car, &cont_df);
-
-            CborValue::Array(vec![
-                CborValue::Integer(NodeKind::DataFrame as i128),
-                CborValue::Integer(checksum as i128),
-                CborValue::Integer(0),
-                CborValue::Integer(2),
-                CborValue::Bytes(rewards_payload[..mid].to_vec()),
-                CborValue::Array(vec![cbor_link(&cont_cid)]),
-            ])
-        } else {
-            CborValue::Array(vec![
-                CborValue::Integer(NodeKind::DataFrame as i128),
-                CborValue::Null,
-                CborValue::Null,
-                CborValue::Null,
-                CborValue::Bytes(rewards_payload),
-                CborValue::Null,
-            ])
-        };
+        let rewards_df = make_dataframe_cbor(&mut car, rewards_payload, split_rewards_frames);
 
         let rewards_node = CborValue::Array(vec![
             CborValue::Integer(NodeKind::Rewards as i128),
@@ -1415,6 +1433,45 @@ mod tests {
         let missing = decode_transaction_by_signature(slot, &car, &Signature::from([99u8; 64]))
             .expect("lookup missing");
         assert!(missing.is_none());
+    }
+
+    #[test]
+    fn decodes_multiframe_dataframe_transaction_and_metadata() {
+        for (slot, tx) in [
+            (302_400_001u64, sample_v0_tx(88)),
+            (43_200_000u64, sample_legacy_tx(89)),
+        ] {
+            let other_tx = sample_legacy_tx(10);
+            let target_sig = tx.signatures[0];
+            let car = build_synthetic_slot_car_with_options(
+                slot,
+                slot - 1,
+                0x33,
+                &[other_tx, tx],
+                true,
+                true, // split both transaction data and metadata into 3 CRC64-verified DataFrames
+            );
+
+            let found = decode_transaction_by_signature(slot, &car, &target_sig)
+                .expect("decode multiframe tx")
+                .expect("tx found");
+            assert_eq!(found.slot, slot);
+            assert_eq!(found.block_time, Some(1_730_000_000));
+            assert_eq!(found.tx_with_meta.transaction_signature(), &target_sig);
+
+            for encoding in [
+                UiTransactionEncoding::Json,
+                UiTransactionEncoding::JsonParsed,
+                UiTransactionEncoding::Base64,
+                UiTransactionEncoding::Base58,
+            ] {
+                let encoded = encode_transaction(found.clone(), encoding, Some(0))
+                    .expect("encode multiframe tx");
+                assert_eq!(encoded.slot, slot);
+                assert_eq!(encoded.block_time, Some(1_730_000_000));
+                assert!(encoded.transaction.meta.is_some());
+            }
+        }
     }
 
     #[test]
