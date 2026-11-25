@@ -1,11 +1,11 @@
 # OnlyBlocks in Elixir
 
 Standalone Elixir: no Mix project, no Hex packages. `build.sh` compiles
-`lib/*.ex` with `elixirc` into `_build/ebin`. It takes Elixir from `PATH` or
-from the local Nix store (`nix shell nixpkgs#elixir`, offline first) and
-records that toolchain path in `_build/elixir_bin`. `run.sh` `exec`s
-`elixir --no-halt` directly, so it starts in about a second and never
-invokes nix.
+`lib/*.ex` with `elixirc` into `_build/ebin`. It uses Elixir from `PATH`,
+reuses a cached toolchain path when available, or looks it up in the local
+Nix store with `nix shell --offline nixpkgs#elixir`. It records the path in
+`_build/elixir_bin`. `run.sh` builds if artifacts are missing, then `exec`s
+`elixir --no-halt` directly.
 
 ```sh
 ./build.sh
@@ -32,8 +32,8 @@ invokes nix.
   text, so slots are validated as literals and ids are echoed verbatim.
   Nesting is capped at 128 levels.
 
-**Process model.** The server is one OS process (`beam.smp`). The only
-other process is the VM's own `erl_child_setup`. Every BEAM forks this
-helper at boot to spawn ports; it is part of the runtime and can't be
-turned off. The server never opens a port or child process: no `curl`,
-no `os:cmd`, and the TLS trust store is read from a PEM file.
+**Process model.** The server runs in `beam.smp`. The BEAM starts its own
+`erl_child_setup` OS helper for managing external port programs. The
+listener uses OTP TCP sockets. Numeric bind addresses are parsed directly,
+so binding `127.0.0.1` skips hostname resolution. Hostname lookups can
+start OTP's `inet_gethost` helper. HTTP and TLS run inside the BEAM.

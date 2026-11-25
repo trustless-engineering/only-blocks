@@ -162,10 +162,17 @@ defmodule OnlyBlocks.CLI do
     with [host, port_text] <- String.split(bind, ~r/:(?=[^:]*$)/),
          {port, ""} <- Integer.parse(port_text),
          host = host |> String.trim_leading("[") |> String.trim_trailing("]") |> String.to_charlist(),
-         {:ok, ip} <- :inet.getaddr(host, if(:inet.parse_ipv6strict_address(host) |> elem(0) == :ok, do: :inet6, else: :inet)) do
+         {:ok, ip} <- resolve_bind_host(host) do
       {ip, port}
     else
       _ -> throw({:usage, "--bind must be HOST:PORT"})
+    end
+  end
+
+  defp resolve_bind_host(host) do
+    case :inet.parse_address(host) do
+      {:ok, ip} -> {:ok, ip}
+      {:error, _} -> :inet.getaddr(host, :inet)
     end
   end
 end

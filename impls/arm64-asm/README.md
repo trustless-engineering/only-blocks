@@ -1,8 +1,8 @@
 # OnlyBlocks in ARM64 assembly
 
-Hand-written AArch64 assembly for macOS on Apple Silicon. About 9,100 lines
-of `.s` across eleven files (about 8,400 without blanks or comments), with no
-C anywhere. `build.sh` assembles them with
+Hand-written AArch64 assembly for macOS on Apple Silicon. The 11 `.s` files
+contain 8,963 total lines, including 8,276 non-blank, non-comment lines.
+The implementation is entirely assembly. `build.sh` assembles it with
 `clang -arch arm64` and links the result against libSystem.
 
 ```sh

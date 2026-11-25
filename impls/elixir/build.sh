@@ -14,8 +14,7 @@ elif [ -s _build/elixir_bin ] && [ -x "$(cat _build/elixir_bin)/elixirc" ]; then
   bin="$(cat _build/elixir_bin)"
 else
   find_bin='dirname "$(command -v elixirc)"'
-  bin="$(nix shell --offline nixpkgs#elixir -c sh -c "$find_bin" 2>/dev/null ||
-         nix shell nixpkgs#elixir -c sh -c "$find_bin")"
+  bin="$(nix shell --offline nixpkgs#elixir -c sh -c "$find_bin")"
 fi
 printf '%s\n' "$bin" > _build/elixir_bin
 

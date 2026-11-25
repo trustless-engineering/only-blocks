@@ -17,9 +17,10 @@ python3 ../../conformance/runner.py --impl fortran
 
 * There is no C. `iso_c_binding` declares only libc calls: `socket`,
   `setsockopt`, `bind`, `listen`, `accept`, `connect`, `recv`, `send`,
-  `close`, `getaddrinfo`, `signal`, `_exit`, `usleep`, `time`, and
-  `popen`/`fread`/`pclose`. All of them are non-variadic. On Apple arm64 a
-  variadic call such as `fcntl` would receive its arguments in the wrong place.
+  `shutdown`, `close`, `getaddrinfo`, `freeaddrinfo`, `signal`, `_exit`,
+  `usleep`, `time`, and `popen`/`fread`/`pclose`. All of them are non-variadic.
+  On Apple arm64 a variadic call such as `fcntl` would receive its arguments
+  in the wrong place.
 * `http://` Range reads use raw POSIX TCP from Fortran: the request line,
   `Content-Length`, chunked framing and per-read caps. The conformance mock
   origin uses this path.
