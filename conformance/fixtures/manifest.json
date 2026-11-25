@@ -1,0 +1,3073 @@
+{
+  "archived_epochs": [
+    100,
+    700
+  ],
+  "epochs": {
+    "100": {
+      "car_file": "epochs/100/epoch-100.car",
+      "slot_ranges": {
+        "43200000": {
+          "length": 182,
+          "offset": 0
+        },
+        "43200001": {
+          "length": 931,
+          "offset": 182
+        }
+      }
+    },
+    "700": {
+      "car_file": "epochs/700/epoch-700.car",
+      "slot_ranges": {
+        "302400004": {
+          "length": 0,
+          "offset": 0
+        },
+        "302400009": {
+          "length": 182,
+          "offset": 0
+        },
+        "302400010": {
+          "length": 1085,
+          "offset": 182
+        },
+        "302400011": {
+          "length": 1754,
+          "offset": 1267
+        },
+        "302400012": {
+          "length": 1676,
+          "offset": 3021
+        }
+      }
+    }
+  },
+  "version": 1,
+  "cases": [
+    {
+      "id": "health_ok",
+      "description": "getHealth with no params",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"getHealth\"}",
+      "expect_kind": "result",
+      "expected_id": 1,
+      "expected_result": "ok"
+    },
+    {
+      "id": "health_null_params",
+      "description": "getHealth with null params",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":\"health\",\"method\":\"getHealth\",\"params\":null}",
+      "expect_kind": "result",
+      "expected_id": "health",
+      "expected_result": "ok"
+    },
+    {
+      "id": "health_empty_params",
+      "description": "getHealth with an empty params array",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"getHealth\",\"params\":[]}",
+      "expect_kind": "result",
+      "expected_id": 3,
+      "expected_result": "ok"
+    },
+    {
+      "id": "modern_json_full",
+      "description": "Modern full block with legacy and v0 transactions",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"getBlock\",\"params\":[302400011,{\"maxSupportedTransactionVersion\":0,\"encoding\":\"json\",\"transactionDetails\":\"full\",\"rewards\":true}]}",
+      "expect_kind": "result",
+      "expected_id": 4,
+      "expected_result": {
+        "blockHeight": 302399911,
+        "blockTime": 1902400011,
+        "blockhash": "3qbR1eZRqXUWroWKKYhbDmR3FfqTHfqSU8zZSxtANzYh",
+        "numRewardPartitions": 4,
+        "parentSlot": 302400010,
+        "previousBlockhash": "3mg7sM6RFEBHiiFotFNfvteH1WdFcc9cujKuPaqZdfDz",
+        "rewards": [
+          {
+            "commission": null,
+            "lamports": 2500,
+            "postBalance": 52500,
+            "pubkey": "US517G5965aydkZ46HS38QLi7UQiSojurfbQfKCELFx",
+            "rewardType": "Fee"
+          },
+          {
+            "commission": null,
+            "lamports": 1234,
+            "postBalance": 51234,
+            "pubkey": "YMN9Qj5jPNp7j14VPcML1B6xGgcPWVZUGLFU3Mnyfaf",
+            "rewardType": "Staking"
+          },
+          {
+            "commission": 7,
+            "lamports": 321,
+            "postBalance": 50321,
+            "pubkey": "cGfHiC6Kgg3FpFZvgwGcswsCRtp4aBP2fzuXRQPizuN",
+            "rewardType": "Voting"
+          }
+        ],
+        "transactions": [
+          {
+            "meta": {
+              "computeUnitsConsumed": 300,
+              "costUnits": 600,
+              "err": null,
+              "fee": 5000,
+              "innerInstructions": [
+                {
+                  "index": 0,
+                  "instructions": [
+                    {
+                      "accounts": [
+                        1
+                      ],
+                      "data": "1bM",
+                      "programIdIndex": 2,
+                      "stackHeight": 2
+                    }
+                  ]
+                }
+              ],
+              "loadedAddresses": {
+                "readonly": [],
+                "writable": []
+              },
+              "logMessages": [
+                "Program LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY invoke [1]",
+                "Program log: golden fixture",
+                "Program LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY success"
+              ],
+              "postBalances": [
+                44000,
+                11000,
+                1
+              ],
+              "postTokenBalances": [
+                {
+                  "accountIndex": 1,
+                  "mint": "swqrv48gsrwpBFbftEwnP2vB4jckpvfGJfXkwaniLCC",
+                  "owner": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+                  "programId": "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY",
+                  "uiTokenAmount": {
+                    "amount": "5",
+                    "decimals": 6,
+                    "uiAmount": 5e-06,
+                    "uiAmountString": "0.000005"
+                  }
+                }
+              ],
+              "preBalances": [
+                50000,
+                10000,
+                1
+              ],
+              "preTokenBalances": [
+                {
+                  "accountIndex": 1,
+                  "mint": "swqrv48gsrwpBFbftEwnP2vB4jckpvfGJfXkwaniLCC",
+                  "owner": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+                  "programId": "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY",
+                  "uiTokenAmount": {
+                    "amount": "1250000",
+                    "decimals": 6,
+                    "uiAmount": 1.25,
+                    "uiAmountString": "1.25"
+                  }
+                }
+              ],
+              "returnData": {
+                "data": [
+                  "AP8BKg==",
+                  "base64"
+                ],
+                "programId": "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY"
+              },
+              "rewards": [],
+              "status": {
+                "Ok": null
+              }
+            },
+            "transaction": {
+              "message": {
+                "accountKeys": [
+                  "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+                  "8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR",
+                  "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY"
+                ],
+                "header": {
+                  "numReadonlySignedAccounts": 0,
+                  "numReadonlyUnsignedAccounts": 1,
+                  "numRequiredSignatures": 1
+                },
+                "instructions": [
+                  {
+                    "accounts": [
+                      0,
+                      1
+                    ],
+                    "data": "1Pki",
+                    "programIdIndex": 2,
+                    "stackHeight": 1
+                  }
+                ],
+                "recentBlockhash": "3mg7sM6RFEBHiiFotFNfvteH1WdFcc9cujKuPaqZdfDz"
+              },
+              "signatures": [
+                "2FBJ7cbxxuf1W4NW2mSyB6AaHGW14mGULDxMEoLLaH7cuSCxkDo4nhgSCbxoFoaj1UcKXBcRzHLXT8TMaLfJUcY5"
+              ]
+            },
+            "version": "legacy"
+          },
+          {
+            "meta": {
+              "computeUnitsConsumed": 450,
+              "costUnits": 900,
+              "err": {
+                "InstructionError": [
+                  0,
+                  {
+                    "Custom": 42
+                  }
+                ]
+              },
+              "fee": 5000,
+              "innerInstructions": [
+                {
+                  "index": 0,
+                  "instructions": [
+                    {
+                      "accounts": [
+                        2,
+                        3
+                      ],
+                      "data": "1bM",
+                      "programIdIndex": 1,
+                      "stackHeight": 2
+                    }
+                  ]
+                }
+              ],
+              "loadedAddresses": {
+                "readonly": [
+                  "gBxS1f6uyyGPuW5MzGBukidSb71jdsCb5fZaoSzULE5"
+                ],
+                "writable": [
+                  "GgBaCs3NCBuZN12kCJgAW63ydqohFkHEdfdEXBPzLHq"
+                ]
+              },
+              "logMessages": [
+                "Program QWmroo4YnnMqYW3cnxWkFdaTxGD3P7vMSzwMHGbUzwF invoke [1]",
+                "Program log: golden fixture",
+                "Program QWmroo4YnnMqYW3cnxWkFdaTxGD3P7vMSzwMHGbUzwF failed: custom program error: 0x2a"
+              ],
+              "postBalances": [
+                45000,
+                1,
+                10000,
+                1
+              ],
+              "postTokenBalances": [
+                {
+                  "accountIndex": 2,
+                  "mint": "swqrv48gsrwpBFbftEwnP2vB4jckpvfGJfXkwaniLCC",
+                  "owner": "CktRuQ2mttgRGkXJtyksdKHjUdc2C4TgDzyB98oEzy8",
+                  "programId": "QWmroo4YnnMqYW3cnxWkFdaTxGD3P7vMSzwMHGbUzwF",
+                  "uiTokenAmount": {
+                    "amount": "1250000",
+                    "decimals": 6,
+                    "uiAmount": 1.25,
+                    "uiAmountString": "1.25"
+                  }
+                }
+              ],
+              "preBalances": [
+                50000,
+                1,
+                10000,
+                1
+              ],
+              "preTokenBalances": [
+                {
+                  "accountIndex": 2,
+                  "mint": "swqrv48gsrwpBFbftEwnP2vB4jckpvfGJfXkwaniLCC",
+                  "owner": "CktRuQ2mttgRGkXJtyksdKHjUdc2C4TgDzyB98oEzy8",
+                  "programId": "QWmroo4YnnMqYW3cnxWkFdaTxGD3P7vMSzwMHGbUzwF",
+                  "uiTokenAmount": {
+                    "amount": "1250000",
+                    "decimals": 6,
+                    "uiAmount": 1.25,
+                    "uiAmountString": "1.25"
+                  }
+                }
+              ],
+              "returnData": {
+                "data": [
+                  "AP8BKg==",
+                  "base64"
+                ],
+                "programId": "QWmroo4YnnMqYW3cnxWkFdaTxGD3P7vMSzwMHGbUzwF"
+              },
+              "rewards": [],
+              "status": {
+                "Err": {
+                  "InstructionError": [
+                    0,
+                    {
+                      "Custom": 42
+                    }
+                  ]
+                }
+              }
+            },
+            "transaction": {
+              "message": {
+                "accountKeys": [
+                  "CktRuQ2mttgRGkXJtyksdKHjUdc2C4TgDzyB98oEzy8",
+                  "QWmroo4YnnMqYW3cnxWkFdaTxGD3P7vMSzwMHGbUzwF"
+                ],
+                "addressTableLookups": [
+                  {
+                    "accountKey": "p2Yicb86aZig616Eav2VWG9vuXR5mEqhtzshZYBxzsV",
+                    "readonlyIndexes": [
+                      9
+                    ],
+                    "writableIndexes": [
+                      4
+                    ]
+                  }
+                ],
+                "header": {
+                  "numReadonlySignedAccounts": 0,
+                  "numReadonlyUnsignedAccounts": 1,
+                  "numRequiredSignatures": 1
+                },
+                "instructions": [
+                  {
+                    "accounts": [
+                      0,
+                      2,
+                      3
+                    ],
+                    "data": "1Je",
+                    "programIdIndex": 1,
+                    "stackHeight": 1
+                  }
+                ],
+                "recentBlockhash": "3mg7sM6RFEBHiiFotFNfvteH1WdFcc9cujKuPaqZdfDz"
+              },
+              "signatures": [
+                "2GLpKt9QByK3P3VPx7oy9P63wtJJqjB7FreXra3p25DLeNsWWtMcf27PoQN9eVd95E623c74sirmyVA1Kuij5fv6"
+              ]
+            },
+            "version": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "modern_json_parsed",
+      "description": "Modern block with partially decoded custom instructions",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"getBlock\",\"params\":[302400011,{\"maxSupportedTransactionVersion\":0,\"encoding\":\"jsonParsed\"}]}",
+      "expect_kind": "result",
+      "expected_id": 5,
+      "expected_result": {
+        "blockHeight": 302399911,
+        "blockTime": 1902400011,
+        "blockhash": "3qbR1eZRqXUWroWKKYhbDmR3FfqTHfqSU8zZSxtANzYh",
+        "numRewardPartitions": 4,
+        "parentSlot": 302400010,
+        "previousBlockhash": "3mg7sM6RFEBHiiFotFNfvteH1WdFcc9cujKuPaqZdfDz",
+        "rewards": [
+          {
+            "commission": null,
+            "lamports": 2500,
+            "postBalance": 52500,
+            "pubkey": "US517G5965aydkZ46HS38QLi7UQiSojurfbQfKCELFx",
+            "rewardType": "Fee"
+          },
+          {
+            "commission": null,
+            "lamports": 1234,
+            "postBalance": 51234,
+            "pubkey": "YMN9Qj5jPNp7j14VPcML1B6xGgcPWVZUGLFU3Mnyfaf",
+            "rewardType": "Staking"
+          },
+          {
+            "commission": 7,
+            "lamports": 321,
+            "postBalance": 50321,
+            "pubkey": "cGfHiC6Kgg3FpFZvgwGcswsCRtp4aBP2fzuXRQPizuN",
+            "rewardType": "Voting"
+          }
+        ],
+        "transactions": [
+          {
+            "meta": {
+              "computeUnitsConsumed": 300,
+              "costUnits": 600,
+              "err": null,
+              "fee": 5000,
+              "innerInstructions": [
+                {
+                  "index": 0,
+                  "instructions": [
+                    {
+                      "accounts": [
+                        "8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR"
+                      ],
+                      "data": "1bM",
+                      "programId": "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY",
+                      "stackHeight": 2
+                    }
+                  ]
+                }
+              ],
+              "logMessages": [
+                "Program LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY invoke [1]",
+                "Program log: golden fixture",
+                "Program LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY success"
+              ],
+              "postBalances": [
+                44000,
+                11000,
+                1
+              ],
+              "postTokenBalances": [
+                {
+                  "accountIndex": 1,
+                  "mint": "swqrv48gsrwpBFbftEwnP2vB4jckpvfGJfXkwaniLCC",
+                  "owner": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+                  "programId": "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY",
+                  "uiTokenAmount": {
+                    "amount": "5",
+                    "decimals": 6,
+                    "uiAmount": 5e-06,
+                    "uiAmountString": "0.000005"
+                  }
+                }
+              ],
+              "preBalances": [
+                50000,
+                10000,
+                1
+              ],
+              "preTokenBalances": [
+                {
+                  "accountIndex": 1,
+                  "mint": "swqrv48gsrwpBFbftEwnP2vB4jckpvfGJfXkwaniLCC",
+                  "owner": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+                  "programId": "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY",
+                  "uiTokenAmount": {
+                    "amount": "1250000",
+                    "decimals": 6,
+                    "uiAmount": 1.25,
+                    "uiAmountString": "1.25"
+                  }
+                }
+              ],
+              "returnData": {
+                "data": [
+                  "AP8BKg==",
+                  "base64"
+                ],
+                "programId": "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY"
+              },
+              "rewards": [],
+              "status": {
+                "Ok": null
+              }
+            },
+            "transaction": {
+              "message": {
+                "accountKeys": [
+                  {
+                    "pubkey": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+                    "signer": true,
+                    "source": "transaction",
+                    "writable": true
+                  },
+                  {
+                    "pubkey": "8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR",
+                    "signer": false,
+                    "source": "transaction",
+                    "writable": true
+                  },
+                  {
+                    "pubkey": "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY",
+                    "signer": false,
+                    "source": "transaction",
+                    "writable": false
+                  }
+                ],
+                "instructions": [
+                  {
+                    "accounts": [
+                      "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+                      "8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR"
+                    ],
+                    "data": "1Pki",
+                    "programId": "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY",
+                    "stackHeight": 1
+                  }
+                ],
+                "recentBlockhash": "3mg7sM6RFEBHiiFotFNfvteH1WdFcc9cujKuPaqZdfDz"
+              },
+              "signatures": [
+                "2FBJ7cbxxuf1W4NW2mSyB6AaHGW14mGULDxMEoLLaH7cuSCxkDo4nhgSCbxoFoaj1UcKXBcRzHLXT8TMaLfJUcY5"
+              ]
+            },
+            "version": "legacy"
+          },
+          {
+            "meta": {
+              "computeUnitsConsumed": 450,
+              "costUnits": 900,
+              "err": {
+                "InstructionError": [
+                  0,
+                  {
+                    "Custom": 42
+                  }
+                ]
+              },
+              "fee": 5000,
+              "innerInstructions": [
+                {
+                  "index": 0,
+                  "instructions": [
+                    {
+                      "accounts": [
+                        "GgBaCs3NCBuZN12kCJgAW63ydqohFkHEdfdEXBPzLHq",
+                        "gBxS1f6uyyGPuW5MzGBukidSb71jdsCb5fZaoSzULE5"
+                      ],
+                      "data": "1bM",
+                      "programId": "QWmroo4YnnMqYW3cnxWkFdaTxGD3P7vMSzwMHGbUzwF",
+                      "stackHeight": 2
+                    }
+                  ]
+                }
+              ],
+              "logMessages": [
+                "Program QWmroo4YnnMqYW3cnxWkFdaTxGD3P7vMSzwMHGbUzwF invoke [1]",
+                "Program log: golden fixture",
+                "Program QWmroo4YnnMqYW3cnxWkFdaTxGD3P7vMSzwMHGbUzwF failed: custom program error: 0x2a"
+              ],
+              "postBalances": [
+                45000,
+                1,
+                10000,
+                1
+              ],
+              "postTokenBalances": [
+                {
+                  "accountIndex": 2,
+                  "mint": "swqrv48gsrwpBFbftEwnP2vB4jckpvfGJfXkwaniLCC",
+                  "owner": "CktRuQ2mttgRGkXJtyksdKHjUdc2C4TgDzyB98oEzy8",
+                  "programId": "QWmroo4YnnMqYW3cnxWkFdaTxGD3P7vMSzwMHGbUzwF",
+                  "uiTokenAmount": {
+                    "amount": "1250000",
+                    "decimals": 6,
+                    "uiAmount": 1.25,
+                    "uiAmountString": "1.25"
+                  }
+                }
+              ],
+              "preBalances": [
+                50000,
+                1,
+                10000,
+                1
+              ],
+              "preTokenBalances": [
+                {
+                  "accountIndex": 2,
+                  "mint": "swqrv48gsrwpBFbftEwnP2vB4jckpvfGJfXkwaniLCC",
+                  "owner": "CktRuQ2mttgRGkXJtyksdKHjUdc2C4TgDzyB98oEzy8",
+                  "programId": "QWmroo4YnnMqYW3cnxWkFdaTxGD3P7vMSzwMHGbUzwF",
+                  "uiTokenAmount": {
+                    "amount": "1250000",
+                    "decimals": 6,
+                    "uiAmount": 1.25,
+                    "uiAmountString": "1.25"
+                  }
+                }
+              ],
+              "returnData": {
+                "data": [
+                  "AP8BKg==",
+                  "base64"
+                ],
+                "programId": "QWmroo4YnnMqYW3cnxWkFdaTxGD3P7vMSzwMHGbUzwF"
+              },
+              "rewards": [],
+              "status": {
+                "Err": {
+                  "InstructionError": [
+                    0,
+                    {
+                      "Custom": 42
+                    }
+                  ]
+                }
+              }
+            },
+            "transaction": {
+              "message": {
+                "accountKeys": [
+                  {
+                    "pubkey": "CktRuQ2mttgRGkXJtyksdKHjUdc2C4TgDzyB98oEzy8",
+                    "signer": true,
+                    "source": "transaction",
+                    "writable": true
+                  },
+                  {
+                    "pubkey": "QWmroo4YnnMqYW3cnxWkFdaTxGD3P7vMSzwMHGbUzwF",
+                    "signer": false,
+                    "source": "transaction",
+                    "writable": false
+                  },
+                  {
+                    "pubkey": "GgBaCs3NCBuZN12kCJgAW63ydqohFkHEdfdEXBPzLHq",
+                    "signer": false,
+                    "source": "lookupTable",
+                    "writable": true
+                  },
+                  {
+                    "pubkey": "gBxS1f6uyyGPuW5MzGBukidSb71jdsCb5fZaoSzULE5",
+                    "signer": false,
+                    "source": "lookupTable",
+                    "writable": false
+                  }
+                ],
+                "addressTableLookups": [
+                  {
+                    "accountKey": "p2Yicb86aZig616Eav2VWG9vuXR5mEqhtzshZYBxzsV",
+                    "readonlyIndexes": [
+                      9
+                    ],
+                    "writableIndexes": [
+                      4
+                    ]
+                  }
+                ],
+                "instructions": [
+                  {
+                    "accounts": [
+                      "CktRuQ2mttgRGkXJtyksdKHjUdc2C4TgDzyB98oEzy8",
+                      "GgBaCs3NCBuZN12kCJgAW63ydqohFkHEdfdEXBPzLHq",
+                      "gBxS1f6uyyGPuW5MzGBukidSb71jdsCb5fZaoSzULE5"
+                    ],
+                    "data": "1Je",
+                    "programId": "QWmroo4YnnMqYW3cnxWkFdaTxGD3P7vMSzwMHGbUzwF",
+                    "stackHeight": 1
+                  }
+                ],
+                "recentBlockhash": "3mg7sM6RFEBHiiFotFNfvteH1WdFcc9cujKuPaqZdfDz"
+              },
+              "signatures": [
+                "2GLpKt9QByK3P3VPx7oy9P63wtJJqjB7FreXra3p25DLeNsWWtMcf27PoQN9eVd95E623c74sirmyVA1Kuij5fv6"
+              ]
+            },
+            "version": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "modern_base64",
+      "description": "Modern block with base64 transaction wire bytes",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"getBlock\",\"params\":[302400011,{\"maxSupportedTransactionVersion\":0,\"encoding\":\"base64\"}]}",
+      "expect_kind": "result",
+      "expected_id": 6,
+      "expected_result": {
+        "blockHeight": 302399911,
+        "blockTime": 1902400011,
+        "blockhash": "3qbR1eZRqXUWroWKKYhbDmR3FfqTHfqSU8zZSxtANzYh",
+        "numRewardPartitions": 4,
+        "parentSlot": 302400010,
+        "previousBlockhash": "3mg7sM6RFEBHiiFotFNfvteH1WdFcc9cujKuPaqZdfDz",
+        "rewards": [
+          {
+            "commission": null,
+            "lamports": 2500,
+            "postBalance": 52500,
+            "pubkey": "US517G5965aydkZ46HS38QLi7UQiSojurfbQfKCELFx",
+            "rewardType": "Fee"
+          },
+          {
+            "commission": null,
+            "lamports": 1234,
+            "postBalance": 51234,
+            "pubkey": "YMN9Qj5jPNp7j14VPcML1B6xGgcPWVZUGLFU3Mnyfaf",
+            "rewardType": "Staking"
+          },
+          {
+            "commission": 7,
+            "lamports": 321,
+            "postBalance": 50321,
+            "pubkey": "cGfHiC6Kgg3FpFZvgwGcswsCRtp4aBP2fzuXRQPizuN",
+            "rewardType": "Voting"
+          }
+        ],
+        "transactions": [
+          {
+            "meta": {
+              "computeUnitsConsumed": 300,
+              "costUnits": 600,
+              "err": null,
+              "fee": 5000,
+              "innerInstructions": [
+                {
+                  "index": 0,
+                  "instructions": [
+                    {
+                      "accounts": [
+                        1
+                      ],
+                      "data": "1bM",
+                      "programIdIndex": 2,
+                      "stackHeight": 2
+                    }
+                  ]
+                }
+              ],
+              "loadedAddresses": {
+                "readonly": [],
+                "writable": []
+              },
+              "logMessages": [
+                "Program LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY invoke [1]",
+                "Program log: golden fixture",
+                "Program LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY success"
+              ],
+              "postBalances": [
+                44000,
+                11000,
+                1
+              ],
+              "postTokenBalances": [
+                {
+                  "accountIndex": 1,
+                  "mint": "swqrv48gsrwpBFbftEwnP2vB4jckpvfGJfXkwaniLCC",
+                  "owner": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+                  "programId": "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY",
+                  "uiTokenAmount": {
+                    "amount": "5",
+                    "decimals": 6,
+                    "uiAmount": 5e-06,
+                    "uiAmountString": "0.000005"
+                  }
+                }
+              ],
+              "preBalances": [
+                50000,
+                10000,
+                1
+              ],
+              "preTokenBalances": [
+                {
+                  "accountIndex": 1,
+                  "mint": "swqrv48gsrwpBFbftEwnP2vB4jckpvfGJfXkwaniLCC",
+                  "owner": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+                  "programId": "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY",
+                  "uiTokenAmount": {
+                    "amount": "1250000",
+                    "decimals": 6,
+                    "uiAmount": 1.25,
+                    "uiAmountString": "1.25"
+                  }
+                }
+              ],
+              "returnData": {
+                "data": [
+                  "AP8BKg==",
+                  "base64"
+                ],
+                "programId": "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY"
+              },
+              "rewards": [],
+              "status": {
+                "Ok": null
+              }
+            },
+            "transaction": [
+              "AT4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4BAAEDAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQECAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkBAgIAAQQAASr/",
+              "base64"
+            ],
+            "version": "legacy"
+          },
+          {
+            "meta": {
+              "computeUnitsConsumed": 450,
+              "costUnits": 900,
+              "err": {
+                "InstructionError": [
+                  0,
+                  {
+                    "Custom": 42
+                  }
+                ]
+              },
+              "fee": 5000,
+              "innerInstructions": [
+                {
+                  "index": 0,
+                  "instructions": [
+                    {
+                      "accounts": [
+                        2,
+                        3
+                      ],
+                      "data": "1bM",
+                      "programIdIndex": 1,
+                      "stackHeight": 2
+                    }
+                  ]
+                }
+              ],
+              "loadedAddresses": {
+                "readonly": [
+                  "gBxS1f6uyyGPuW5MzGBukidSb71jdsCb5fZaoSzULE5"
+                ],
+                "writable": [
+                  "GgBaCs3NCBuZN12kCJgAW63ydqohFkHEdfdEXBPzLHq"
+                ]
+              },
+              "logMessages": [
+                "Program QWmroo4YnnMqYW3cnxWkFdaTxGD3P7vMSzwMHGbUzwF invoke [1]",
+                "Program log: golden fixture",
+                "Program QWmroo4YnnMqYW3cnxWkFdaTxGD3P7vMSzwMHGbUzwF failed: custom program error: 0x2a"
+              ],
+              "postBalances": [
+                45000,
+                1,
+                10000,
+                1
+              ],
+              "postTokenBalances": [
+                {
+                  "accountIndex": 2,
+                  "mint": "swqrv48gsrwpBFbftEwnP2vB4jckpvfGJfXkwaniLCC",
+                  "owner": "CktRuQ2mttgRGkXJtyksdKHjUdc2C4TgDzyB98oEzy8",
+                  "programId": "QWmroo4YnnMqYW3cnxWkFdaTxGD3P7vMSzwMHGbUzwF",
+                  "uiTokenAmount": {
+                    "amount": "1250000",
+                    "decimals": 6,
+                    "uiAmount": 1.25,
+                    "uiAmountString": "1.25"
+                  }
+                }
+              ],
+              "preBalances": [
+                50000,
+                1,
+                10000,
+                1
+              ],
+              "preTokenBalances": [
+                {
+                  "accountIndex": 2,
+                  "mint": "swqrv48gsrwpBFbftEwnP2vB4jckpvfGJfXkwaniLCC",
+                  "owner": "CktRuQ2mttgRGkXJtyksdKHjUdc2C4TgDzyB98oEzy8",
+                  "programId": "QWmroo4YnnMqYW3cnxWkFdaTxGD3P7vMSzwMHGbUzwF",
+                  "uiTokenAmount": {
+                    "amount": "1250000",
+                    "decimals": 6,
+                    "uiAmount": 1.25,
+                    "uiAmountString": "1.25"
+                  }
+                }
+              ],
+              "returnData": {
+                "data": [
+                  "AP8BKg==",
+                  "base64"
+                ],
+                "programId": "QWmroo4YnnMqYW3cnxWkFdaTxGD3P7vMSzwMHGbUzwF"
+              },
+              "rewards": [],
+              "status": {
+                "Err": {
+                  "InstructionError": [
+                    0,
+                    {
+                      "Custom": 42
+                    }
+                  ]
+                }
+              }
+            },
+            "transaction": [
+              "AT8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz+AAQABAgMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKQEBAwACAwMAA/8BDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwBBAEJ",
+              "base64"
+            ],
+            "version": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "modern_base58",
+      "description": "Modern block with base58 transaction wire bytes",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"getBlock\",\"params\":[302400011,{\"maxSupportedTransactionVersion\":0,\"encoding\":\"base58\"}]}",
+      "expect_kind": "result",
+      "expected_id": 7,
+      "expected_result": {
+        "blockHeight": 302399911,
+        "blockTime": 1902400011,
+        "blockhash": "3qbR1eZRqXUWroWKKYhbDmR3FfqTHfqSU8zZSxtANzYh",
+        "numRewardPartitions": 4,
+        "parentSlot": 302400010,
+        "previousBlockhash": "3mg7sM6RFEBHiiFotFNfvteH1WdFcc9cujKuPaqZdfDz",
+        "rewards": [
+          {
+            "commission": null,
+            "lamports": 2500,
+            "postBalance": 52500,
+            "pubkey": "US517G5965aydkZ46HS38QLi7UQiSojurfbQfKCELFx",
+            "rewardType": "Fee"
+          },
+          {
+            "commission": null,
+            "lamports": 1234,
+            "postBalance": 51234,
+            "pubkey": "YMN9Qj5jPNp7j14VPcML1B6xGgcPWVZUGLFU3Mnyfaf",
+            "rewardType": "Staking"
+          },
+          {
+            "commission": 7,
+            "lamports": 321,
+            "postBalance": 50321,
+            "pubkey": "cGfHiC6Kgg3FpFZvgwGcswsCRtp4aBP2fzuXRQPizuN",
+            "rewardType": "Voting"
+          }
+        ],
+        "transactions": [
+          {
+            "meta": {
+              "computeUnitsConsumed": 300,
+              "costUnits": 600,
+              "err": null,
+              "fee": 5000,
+              "innerInstructions": [
+                {
+                  "index": 0,
+                  "instructions": [
+                    {
+                      "accounts": [
+                        1
+                      ],
+                      "data": "1bM",
+                      "programIdIndex": 2,
+                      "stackHeight": 2
+                    }
+                  ]
+                }
+              ],
+              "loadedAddresses": {
+                "readonly": [],
+                "writable": []
+              },
+              "logMessages": [
+                "Program LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY invoke [1]",
+                "Program log: golden fixture",
+                "Program LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY success"
+              ],
+              "postBalances": [
+                44000,
+                11000,
+                1
+              ],
+              "postTokenBalances": [
+                {
+                  "accountIndex": 1,
+                  "mint": "swqrv48gsrwpBFbftEwnP2vB4jckpvfGJfXkwaniLCC",
+                  "owner": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+                  "programId": "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY",
+                  "uiTokenAmount": {
+                    "amount": "5",
+                    "decimals": 6,
+                    "uiAmount": 5e-06,
+                    "uiAmountString": "0.000005"
+                  }
+                }
+              ],
+              "preBalances": [
+                50000,
+                10000,
+                1
+              ],
+              "preTokenBalances": [
+                {
+                  "accountIndex": 1,
+                  "mint": "swqrv48gsrwpBFbftEwnP2vB4jckpvfGJfXkwaniLCC",
+                  "owner": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+                  "programId": "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY",
+                  "uiTokenAmount": {
+                    "amount": "1250000",
+                    "decimals": 6,
+                    "uiAmount": 1.25,
+                    "uiAmountString": "1.25"
+                  }
+                }
+              ],
+              "returnData": {
+                "data": [
+                  "AP8BKg==",
+                  "base64"
+                ],
+                "programId": "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY"
+              },
+              "rewards": [],
+              "status": {
+                "Ok": null
+              }
+            },
+            "transaction": [
+              "5fU4r2Fniw4gXBZpz56JTLn3mzHy27rzHfC49qczd7v7z9MhRPgP99sUEiGNuA3Xxp9WNn3A2MJ6kixaUgdprFm2fSTCCLNKgsbN46jBPo2o7AiTUP3ch57GrXaA2FDtP8sVpafXSNuj7N5wHyiSvxEUMvhPYcgBrK3BfjGT1mogS6ssVPTbqJoRFYZgFGitMU61kpZNSWUYqGVnmxoJ9Yh8ZRQTtJozcgjhC4dRGjDy6U9fhH7rojLhKjA67F4mVjNsZoViD32gKyWUhawthY2t9k",
+              "base58"
+            ],
+            "version": "legacy"
+          },
+          {
+            "meta": {
+              "computeUnitsConsumed": 450,
+              "costUnits": 900,
+              "err": {
+                "InstructionError": [
+                  0,
+                  {
+                    "Custom": 42
+                  }
+                ]
+              },
+              "fee": 5000,
+              "innerInstructions": [
+                {
+                  "index": 0,
+                  "instructions": [
+                    {
+                      "accounts": [
+                        2,
+                        3
+                      ],
+                      "data": "1bM",
+                      "programIdIndex": 1,
+                      "stackHeight": 2
+                    }
+                  ]
+                }
+              ],
+              "loadedAddresses": {
+                "readonly": [
+                  "gBxS1f6uyyGPuW5MzGBukidSb71jdsCb5fZaoSzULE5"
+                ],
+                "writable": [
+                  "GgBaCs3NCBuZN12kCJgAW63ydqohFkHEdfdEXBPzLHq"
+                ]
+              },
+              "logMessages": [
+                "Program QWmroo4YnnMqYW3cnxWkFdaTxGD3P7vMSzwMHGbUzwF invoke [1]",
+                "Program log: golden fixture",
+                "Program QWmroo4YnnMqYW3cnxWkFdaTxGD3P7vMSzwMHGbUzwF failed: custom program error: 0x2a"
+              ],
+              "postBalances": [
+                45000,
+                1,
+                10000,
+                1
+              ],
+              "postTokenBalances": [
+                {
+                  "accountIndex": 2,
+                  "mint": "swqrv48gsrwpBFbftEwnP2vB4jckpvfGJfXkwaniLCC",
+                  "owner": "CktRuQ2mttgRGkXJtyksdKHjUdc2C4TgDzyB98oEzy8",
+                  "programId": "QWmroo4YnnMqYW3cnxWkFdaTxGD3P7vMSzwMHGbUzwF",
+                  "uiTokenAmount": {
+                    "amount": "1250000",
+                    "decimals": 6,
+                    "uiAmount": 1.25,
+                    "uiAmountString": "1.25"
+                  }
+                }
+              ],
+              "preBalances": [
+                50000,
+                1,
+                10000,
+                1
+              ],
+              "preTokenBalances": [
+                {
+                  "accountIndex": 2,
+                  "mint": "swqrv48gsrwpBFbftEwnP2vB4jckpvfGJfXkwaniLCC",
+                  "owner": "CktRuQ2mttgRGkXJtyksdKHjUdc2C4TgDzyB98oEzy8",
+                  "programId": "QWmroo4YnnMqYW3cnxWkFdaTxGD3P7vMSzwMHGbUzwF",
+                  "uiTokenAmount": {
+                    "amount": "1250000",
+                    "decimals": 6,
+                    "uiAmount": 1.25,
+                    "uiAmountString": "1.25"
+                  }
+                }
+              ],
+              "returnData": {
+                "data": [
+                  "AP8BKg==",
+                  "base64"
+                ],
+                "programId": "QWmroo4YnnMqYW3cnxWkFdaTxGD3P7vMSzwMHGbUzwF"
+              },
+              "rewards": [],
+              "status": {
+                "Err": {
+                  "InstructionError": [
+                    0,
+                    {
+                      "Custom": 42
+                    }
+                  ]
+                }
+              }
+            },
+            "transaction": [
+              "BHLzvPfcgNRHAcw3zSVFHdJWtCuAkv9XvybU1LdVSaSXuqSdDXba8MACFwtNQRCGQVu99RvPtGDVnsaDCxrbcnaatCWehqUbNrHzpi9uHvuggo8stYLdJwGKawjkT1V5J2xRy4Bp64JTPaKau1odWoGhzkCAD8KHmc22U5Lkti1zCJetCszeKvgP3rV9GgoWYYkCRTeLKrgDUi7CzNPzDAAK6Dk3gyUH6RMamVpHLBdxYgNiLbBDB2FrP8JmU9c35RydPin9NBHxzbMtGwtMxR8zPpZHeTNpFz",
+              "base58"
+            ],
+            "version": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "modern_accounts",
+      "description": "Modern block with account keys and reduced metadata",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":8,\"method\":\"getBlock\",\"params\":[302400011,{\"maxSupportedTransactionVersion\":0,\"encoding\":\"json\",\"transactionDetails\":\"accounts\"}]}",
+      "expect_kind": "result",
+      "expected_id": 8,
+      "expected_result": {
+        "blockHeight": 302399911,
+        "blockTime": 1902400011,
+        "blockhash": "3qbR1eZRqXUWroWKKYhbDmR3FfqTHfqSU8zZSxtANzYh",
+        "numRewardPartitions": 4,
+        "parentSlot": 302400010,
+        "previousBlockhash": "3mg7sM6RFEBHiiFotFNfvteH1WdFcc9cujKuPaqZdfDz",
+        "rewards": [
+          {
+            "commission": null,
+            "lamports": 2500,
+            "postBalance": 52500,
+            "pubkey": "US517G5965aydkZ46HS38QLi7UQiSojurfbQfKCELFx",
+            "rewardType": "Fee"
+          },
+          {
+            "commission": null,
+            "lamports": 1234,
+            "postBalance": 51234,
+            "pubkey": "YMN9Qj5jPNp7j14VPcML1B6xGgcPWVZUGLFU3Mnyfaf",
+            "rewardType": "Staking"
+          },
+          {
+            "commission": 7,
+            "lamports": 321,
+            "postBalance": 50321,
+            "pubkey": "cGfHiC6Kgg3FpFZvgwGcswsCRtp4aBP2fzuXRQPizuN",
+            "rewardType": "Voting"
+          }
+        ],
+        "transactions": [
+          {
+            "meta": {
+              "err": null,
+              "fee": 5000,
+              "postBalances": [
+                44000,
+                11000,
+                1
+              ],
+              "postTokenBalances": [
+                {
+                  "accountIndex": 1,
+                  "mint": "swqrv48gsrwpBFbftEwnP2vB4jckpvfGJfXkwaniLCC",
+                  "owner": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+                  "programId": "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY",
+                  "uiTokenAmount": {
+                    "amount": "5",
+                    "decimals": 6,
+                    "uiAmount": 5e-06,
+                    "uiAmountString": "0.000005"
+                  }
+                }
+              ],
+              "preBalances": [
+                50000,
+                10000,
+                1
+              ],
+              "preTokenBalances": [
+                {
+                  "accountIndex": 1,
+                  "mint": "swqrv48gsrwpBFbftEwnP2vB4jckpvfGJfXkwaniLCC",
+                  "owner": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+                  "programId": "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY",
+                  "uiTokenAmount": {
+                    "amount": "1250000",
+                    "decimals": 6,
+                    "uiAmount": 1.25,
+                    "uiAmountString": "1.25"
+                  }
+                }
+              ],
+              "rewards": [],
+              "status": {
+                "Ok": null
+              }
+            },
+            "transaction": {
+              "accountKeys": [
+                {
+                  "pubkey": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+                  "signer": true,
+                  "source": "transaction",
+                  "writable": true
+                },
+                {
+                  "pubkey": "8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR",
+                  "signer": false,
+                  "source": "transaction",
+                  "writable": true
+                },
+                {
+                  "pubkey": "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY",
+                  "signer": false,
+                  "source": "transaction",
+                  "writable": false
+                }
+              ],
+              "signatures": [
+                "2FBJ7cbxxuf1W4NW2mSyB6AaHGW14mGULDxMEoLLaH7cuSCxkDo4nhgSCbxoFoaj1UcKXBcRzHLXT8TMaLfJUcY5"
+              ]
+            },
+            "version": "legacy"
+          },
+          {
+            "meta": {
+              "err": {
+                "InstructionError": [
+                  0,
+                  {
+                    "Custom": 42
+                  }
+                ]
+              },
+              "fee": 5000,
+              "postBalances": [
+                45000,
+                1,
+                10000,
+                1
+              ],
+              "postTokenBalances": [
+                {
+                  "accountIndex": 2,
+                  "mint": "swqrv48gsrwpBFbftEwnP2vB4jckpvfGJfXkwaniLCC",
+                  "owner": "CktRuQ2mttgRGkXJtyksdKHjUdc2C4TgDzyB98oEzy8",
+                  "programId": "QWmroo4YnnMqYW3cnxWkFdaTxGD3P7vMSzwMHGbUzwF",
+                  "uiTokenAmount": {
+                    "amount": "1250000",
+                    "decimals": 6,
+                    "uiAmount": 1.25,
+                    "uiAmountString": "1.25"
+                  }
+                }
+              ],
+              "preBalances": [
+                50000,
+                1,
+                10000,
+                1
+              ],
+              "preTokenBalances": [
+                {
+                  "accountIndex": 2,
+                  "mint": "swqrv48gsrwpBFbftEwnP2vB4jckpvfGJfXkwaniLCC",
+                  "owner": "CktRuQ2mttgRGkXJtyksdKHjUdc2C4TgDzyB98oEzy8",
+                  "programId": "QWmroo4YnnMqYW3cnxWkFdaTxGD3P7vMSzwMHGbUzwF",
+                  "uiTokenAmount": {
+                    "amount": "1250000",
+                    "decimals": 6,
+                    "uiAmount": 1.25,
+                    "uiAmountString": "1.25"
+                  }
+                }
+              ],
+              "rewards": [],
+              "status": {
+                "Err": {
+                  "InstructionError": [
+                    0,
+                    {
+                      "Custom": 42
+                    }
+                  ]
+                }
+              }
+            },
+            "transaction": {
+              "accountKeys": [
+                {
+                  "pubkey": "CktRuQ2mttgRGkXJtyksdKHjUdc2C4TgDzyB98oEzy8",
+                  "signer": true,
+                  "source": "transaction",
+                  "writable": true
+                },
+                {
+                  "pubkey": "QWmroo4YnnMqYW3cnxWkFdaTxGD3P7vMSzwMHGbUzwF",
+                  "signer": false,
+                  "source": "transaction",
+                  "writable": false
+                },
+                {
+                  "pubkey": "GgBaCs3NCBuZN12kCJgAW63ydqohFkHEdfdEXBPzLHq",
+                  "signer": false,
+                  "source": "lookupTable",
+                  "writable": true
+                },
+                {
+                  "pubkey": "gBxS1f6uyyGPuW5MzGBukidSb71jdsCb5fZaoSzULE5",
+                  "signer": false,
+                  "source": "lookupTable",
+                  "writable": false
+                }
+              ],
+              "signatures": [
+                "2GLpKt9QByK3P3VPx7oy9P63wtJJqjB7FreXra3p25DLeNsWWtMcf27PoQN9eVd95E623c74sirmyVA1Kuij5fv6"
+              ]
+            },
+            "version": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "modern_signatures",
+      "description": "Modern block with transaction signatures",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"getBlock\",\"params\":[302400011,{\"maxSupportedTransactionVersion\":0,\"transactionDetails\":\"signatures\"}]}",
+      "expect_kind": "result",
+      "expected_id": 9,
+      "expected_result": {
+        "blockHeight": 302399911,
+        "blockTime": 1902400011,
+        "blockhash": "3qbR1eZRqXUWroWKKYhbDmR3FfqTHfqSU8zZSxtANzYh",
+        "numRewardPartitions": 4,
+        "parentSlot": 302400010,
+        "previousBlockhash": "3mg7sM6RFEBHiiFotFNfvteH1WdFcc9cujKuPaqZdfDz",
+        "rewards": [
+          {
+            "commission": null,
+            "lamports": 2500,
+            "postBalance": 52500,
+            "pubkey": "US517G5965aydkZ46HS38QLi7UQiSojurfbQfKCELFx",
+            "rewardType": "Fee"
+          },
+          {
+            "commission": null,
+            "lamports": 1234,
+            "postBalance": 51234,
+            "pubkey": "YMN9Qj5jPNp7j14VPcML1B6xGgcPWVZUGLFU3Mnyfaf",
+            "rewardType": "Staking"
+          },
+          {
+            "commission": 7,
+            "lamports": 321,
+            "postBalance": 50321,
+            "pubkey": "cGfHiC6Kgg3FpFZvgwGcswsCRtp4aBP2fzuXRQPizuN",
+            "rewardType": "Voting"
+          }
+        ],
+        "signatures": [
+          "2FBJ7cbxxuf1W4NW2mSyB6AaHGW14mGULDxMEoLLaH7cuSCxkDo4nhgSCbxoFoaj1UcKXBcRzHLXT8TMaLfJUcY5",
+          "2GLpKt9QByK3P3VPx7oy9P63wtJJqjB7FreXra3p25DLeNsWWtMcf27PoQN9eVd95E623c74sirmyVA1Kuij5fv6"
+        ]
+      }
+    },
+    {
+      "id": "modern_none",
+      "description": "Modern block with no transaction details",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":10,\"method\":\"getBlock\",\"params\":[302400011,{\"maxSupportedTransactionVersion\":0,\"transactionDetails\":\"none\"}]}",
+      "expect_kind": "result",
+      "expected_id": 10,
+      "expected_result": {
+        "blockHeight": 302399911,
+        "blockTime": 1902400011,
+        "blockhash": "3qbR1eZRqXUWroWKKYhbDmR3FfqTHfqSU8zZSxtANzYh",
+        "numRewardPartitions": 4,
+        "parentSlot": 302400010,
+        "previousBlockhash": "3mg7sM6RFEBHiiFotFNfvteH1WdFcc9cujKuPaqZdfDz",
+        "rewards": [
+          {
+            "commission": null,
+            "lamports": 2500,
+            "postBalance": 52500,
+            "pubkey": "US517G5965aydkZ46HS38QLi7UQiSojurfbQfKCELFx",
+            "rewardType": "Fee"
+          },
+          {
+            "commission": null,
+            "lamports": 1234,
+            "postBalance": 51234,
+            "pubkey": "YMN9Qj5jPNp7j14VPcML1B6xGgcPWVZUGLFU3Mnyfaf",
+            "rewardType": "Staking"
+          },
+          {
+            "commission": 7,
+            "lamports": 321,
+            "postBalance": 50321,
+            "pubkey": "cGfHiC6Kgg3FpFZvgwGcswsCRtp4aBP2fzuXRQPizuN",
+            "rewardType": "Voting"
+          }
+        ]
+      }
+    },
+    {
+      "id": "modern_rewards_disabled",
+      "description": "Modern block with rewards disabled",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":11,\"method\":\"getBlock\",\"params\":[302400011,{\"maxSupportedTransactionVersion\":0,\"encoding\":\"json\",\"rewards\":false}]}",
+      "expect_kind": "result",
+      "expected_id": 11,
+      "expected_result": {
+        "blockHeight": 302399911,
+        "blockTime": 1902400011,
+        "blockhash": "3qbR1eZRqXUWroWKKYhbDmR3FfqTHfqSU8zZSxtANzYh",
+        "parentSlot": 302400010,
+        "previousBlockhash": "3mg7sM6RFEBHiiFotFNfvteH1WdFcc9cujKuPaqZdfDz",
+        "transactions": [
+          {
+            "meta": {
+              "computeUnitsConsumed": 300,
+              "costUnits": 600,
+              "err": null,
+              "fee": 5000,
+              "innerInstructions": [
+                {
+                  "index": 0,
+                  "instructions": [
+                    {
+                      "accounts": [
+                        1
+                      ],
+                      "data": "1bM",
+                      "programIdIndex": 2,
+                      "stackHeight": 2
+                    }
+                  ]
+                }
+              ],
+              "loadedAddresses": {
+                "readonly": [],
+                "writable": []
+              },
+              "logMessages": [
+                "Program LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY invoke [1]",
+                "Program log: golden fixture",
+                "Program LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY success"
+              ],
+              "postBalances": [
+                44000,
+                11000,
+                1
+              ],
+              "postTokenBalances": [
+                {
+                  "accountIndex": 1,
+                  "mint": "swqrv48gsrwpBFbftEwnP2vB4jckpvfGJfXkwaniLCC",
+                  "owner": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+                  "programId": "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY",
+                  "uiTokenAmount": {
+                    "amount": "5",
+                    "decimals": 6,
+                    "uiAmount": 5e-06,
+                    "uiAmountString": "0.000005"
+                  }
+                }
+              ],
+              "preBalances": [
+                50000,
+                10000,
+                1
+              ],
+              "preTokenBalances": [
+                {
+                  "accountIndex": 1,
+                  "mint": "swqrv48gsrwpBFbftEwnP2vB4jckpvfGJfXkwaniLCC",
+                  "owner": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+                  "programId": "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY",
+                  "uiTokenAmount": {
+                    "amount": "1250000",
+                    "decimals": 6,
+                    "uiAmount": 1.25,
+                    "uiAmountString": "1.25"
+                  }
+                }
+              ],
+              "returnData": {
+                "data": [
+                  "AP8BKg==",
+                  "base64"
+                ],
+                "programId": "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY"
+              },
+              "rewards": null,
+              "status": {
+                "Ok": null
+              }
+            },
+            "transaction": {
+              "message": {
+                "accountKeys": [
+                  "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+                  "8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR",
+                  "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY"
+                ],
+                "header": {
+                  "numReadonlySignedAccounts": 0,
+                  "numReadonlyUnsignedAccounts": 1,
+                  "numRequiredSignatures": 1
+                },
+                "instructions": [
+                  {
+                    "accounts": [
+                      0,
+                      1
+                    ],
+                    "data": "1Pki",
+                    "programIdIndex": 2,
+                    "stackHeight": 1
+                  }
+                ],
+                "recentBlockhash": "3mg7sM6RFEBHiiFotFNfvteH1WdFcc9cujKuPaqZdfDz"
+              },
+              "signatures": [
+                "2FBJ7cbxxuf1W4NW2mSyB6AaHGW14mGULDxMEoLLaH7cuSCxkDo4nhgSCbxoFoaj1UcKXBcRzHLXT8TMaLfJUcY5"
+              ]
+            },
+            "version": "legacy"
+          },
+          {
+            "meta": {
+              "computeUnitsConsumed": 450,
+              "costUnits": 900,
+              "err": {
+                "InstructionError": [
+                  0,
+                  {
+                    "Custom": 42
+                  }
+                ]
+              },
+              "fee": 5000,
+              "innerInstructions": [
+                {
+                  "index": 0,
+                  "instructions": [
+                    {
+                      "accounts": [
+                        2,
+                        3
+                      ],
+                      "data": "1bM",
+                      "programIdIndex": 1,
+                      "stackHeight": 2
+                    }
+                  ]
+                }
+              ],
+              "loadedAddresses": {
+                "readonly": [
+                  "gBxS1f6uyyGPuW5MzGBukidSb71jdsCb5fZaoSzULE5"
+                ],
+                "writable": [
+                  "GgBaCs3NCBuZN12kCJgAW63ydqohFkHEdfdEXBPzLHq"
+                ]
+              },
+              "logMessages": [
+                "Program QWmroo4YnnMqYW3cnxWkFdaTxGD3P7vMSzwMHGbUzwF invoke [1]",
+                "Program log: golden fixture",
+                "Program QWmroo4YnnMqYW3cnxWkFdaTxGD3P7vMSzwMHGbUzwF failed: custom program error: 0x2a"
+              ],
+              "postBalances": [
+                45000,
+                1,
+                10000,
+                1
+              ],
+              "postTokenBalances": [
+                {
+                  "accountIndex": 2,
+                  "mint": "swqrv48gsrwpBFbftEwnP2vB4jckpvfGJfXkwaniLCC",
+                  "owner": "CktRuQ2mttgRGkXJtyksdKHjUdc2C4TgDzyB98oEzy8",
+                  "programId": "QWmroo4YnnMqYW3cnxWkFdaTxGD3P7vMSzwMHGbUzwF",
+                  "uiTokenAmount": {
+                    "amount": "1250000",
+                    "decimals": 6,
+                    "uiAmount": 1.25,
+                    "uiAmountString": "1.25"
+                  }
+                }
+              ],
+              "preBalances": [
+                50000,
+                1,
+                10000,
+                1
+              ],
+              "preTokenBalances": [
+                {
+                  "accountIndex": 2,
+                  "mint": "swqrv48gsrwpBFbftEwnP2vB4jckpvfGJfXkwaniLCC",
+                  "owner": "CktRuQ2mttgRGkXJtyksdKHjUdc2C4TgDzyB98oEzy8",
+                  "programId": "QWmroo4YnnMqYW3cnxWkFdaTxGD3P7vMSzwMHGbUzwF",
+                  "uiTokenAmount": {
+                    "amount": "1250000",
+                    "decimals": 6,
+                    "uiAmount": 1.25,
+                    "uiAmountString": "1.25"
+                  }
+                }
+              ],
+              "returnData": {
+                "data": [
+                  "AP8BKg==",
+                  "base64"
+                ],
+                "programId": "QWmroo4YnnMqYW3cnxWkFdaTxGD3P7vMSzwMHGbUzwF"
+              },
+              "rewards": null,
+              "status": {
+                "Err": {
+                  "InstructionError": [
+                    0,
+                    {
+                      "Custom": 42
+                    }
+                  ]
+                }
+              }
+            },
+            "transaction": {
+              "message": {
+                "accountKeys": [
+                  "CktRuQ2mttgRGkXJtyksdKHjUdc2C4TgDzyB98oEzy8",
+                  "QWmroo4YnnMqYW3cnxWkFdaTxGD3P7vMSzwMHGbUzwF"
+                ],
+                "addressTableLookups": [
+                  {
+                    "accountKey": "p2Yicb86aZig616Eav2VWG9vuXR5mEqhtzshZYBxzsV",
+                    "readonlyIndexes": [
+                      9
+                    ],
+                    "writableIndexes": [
+                      4
+                    ]
+                  }
+                ],
+                "header": {
+                  "numReadonlySignedAccounts": 0,
+                  "numReadonlyUnsignedAccounts": 1,
+                  "numRequiredSignatures": 1
+                },
+                "instructions": [
+                  {
+                    "accounts": [
+                      0,
+                      2,
+                      3
+                    ],
+                    "data": "1Je",
+                    "programIdIndex": 1,
+                    "stackHeight": 1
+                  }
+                ],
+                "recentBlockhash": "3mg7sM6RFEBHiiFotFNfvteH1WdFcc9cujKuPaqZdfDz"
+              },
+              "signatures": [
+                "2GLpKt9QByK3P3VPx7oy9P63wtJJqjB7FreXra3p25DLeNsWWtMcf27PoQN9eVd95E623c74sirmyVA1Kuij5fv6"
+              ]
+            },
+            "version": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "modern_finalized",
+      "description": "Modern block at finalized commitment",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":12,\"method\":\"getBlock\",\"params\":[302400011,{\"maxSupportedTransactionVersion\":0,\"encoding\":\"json\",\"commitment\":\"finalized\"}]}",
+      "expect_kind": "result",
+      "expected_id": 12,
+      "expected_result": {
+        "blockHeight": 302399911,
+        "blockTime": 1902400011,
+        "blockhash": "3qbR1eZRqXUWroWKKYhbDmR3FfqTHfqSU8zZSxtANzYh",
+        "numRewardPartitions": 4,
+        "parentSlot": 302400010,
+        "previousBlockhash": "3mg7sM6RFEBHiiFotFNfvteH1WdFcc9cujKuPaqZdfDz",
+        "rewards": [
+          {
+            "commission": null,
+            "lamports": 2500,
+            "postBalance": 52500,
+            "pubkey": "US517G5965aydkZ46HS38QLi7UQiSojurfbQfKCELFx",
+            "rewardType": "Fee"
+          },
+          {
+            "commission": null,
+            "lamports": 1234,
+            "postBalance": 51234,
+            "pubkey": "YMN9Qj5jPNp7j14VPcML1B6xGgcPWVZUGLFU3Mnyfaf",
+            "rewardType": "Staking"
+          },
+          {
+            "commission": 7,
+            "lamports": 321,
+            "postBalance": 50321,
+            "pubkey": "cGfHiC6Kgg3FpFZvgwGcswsCRtp4aBP2fzuXRQPizuN",
+            "rewardType": "Voting"
+          }
+        ],
+        "transactions": [
+          {
+            "meta": {
+              "computeUnitsConsumed": 300,
+              "costUnits": 600,
+              "err": null,
+              "fee": 5000,
+              "innerInstructions": [
+                {
+                  "index": 0,
+                  "instructions": [
+                    {
+                      "accounts": [
+                        1
+                      ],
+                      "data": "1bM",
+                      "programIdIndex": 2,
+                      "stackHeight": 2
+                    }
+                  ]
+                }
+              ],
+              "loadedAddresses": {
+                "readonly": [],
+                "writable": []
+              },
+              "logMessages": [
+                "Program LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY invoke [1]",
+                "Program log: golden fixture",
+                "Program LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY success"
+              ],
+              "postBalances": [
+                44000,
+                11000,
+                1
+              ],
+              "postTokenBalances": [
+                {
+                  "accountIndex": 1,
+                  "mint": "swqrv48gsrwpBFbftEwnP2vB4jckpvfGJfXkwaniLCC",
+                  "owner": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+                  "programId": "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY",
+                  "uiTokenAmount": {
+                    "amount": "5",
+                    "decimals": 6,
+                    "uiAmount": 5e-06,
+                    "uiAmountString": "0.000005"
+                  }
+                }
+              ],
+              "preBalances": [
+                50000,
+                10000,
+                1
+              ],
+              "preTokenBalances": [
+                {
+                  "accountIndex": 1,
+                  "mint": "swqrv48gsrwpBFbftEwnP2vB4jckpvfGJfXkwaniLCC",
+                  "owner": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+                  "programId": "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY",
+                  "uiTokenAmount": {
+                    "amount": "1250000",
+                    "decimals": 6,
+                    "uiAmount": 1.25,
+                    "uiAmountString": "1.25"
+                  }
+                }
+              ],
+              "returnData": {
+                "data": [
+                  "AP8BKg==",
+                  "base64"
+                ],
+                "programId": "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY"
+              },
+              "rewards": [],
+              "status": {
+                "Ok": null
+              }
+            },
+            "transaction": {
+              "message": {
+                "accountKeys": [
+                  "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+                  "8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR",
+                  "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY"
+                ],
+                "header": {
+                  "numReadonlySignedAccounts": 0,
+                  "numReadonlyUnsignedAccounts": 1,
+                  "numRequiredSignatures": 1
+                },
+                "instructions": [
+                  {
+                    "accounts": [
+                      0,
+                      1
+                    ],
+                    "data": "1Pki",
+                    "programIdIndex": 2,
+                    "stackHeight": 1
+                  }
+                ],
+                "recentBlockhash": "3mg7sM6RFEBHiiFotFNfvteH1WdFcc9cujKuPaqZdfDz"
+              },
+              "signatures": [
+                "2FBJ7cbxxuf1W4NW2mSyB6AaHGW14mGULDxMEoLLaH7cuSCxkDo4nhgSCbxoFoaj1UcKXBcRzHLXT8TMaLfJUcY5"
+              ]
+            },
+            "version": "legacy"
+          },
+          {
+            "meta": {
+              "computeUnitsConsumed": 450,
+              "costUnits": 900,
+              "err": {
+                "InstructionError": [
+                  0,
+                  {
+                    "Custom": 42
+                  }
+                ]
+              },
+              "fee": 5000,
+              "innerInstructions": [
+                {
+                  "index": 0,
+                  "instructions": [
+                    {
+                      "accounts": [
+                        2,
+                        3
+                      ],
+                      "data": "1bM",
+                      "programIdIndex": 1,
+                      "stackHeight": 2
+                    }
+                  ]
+                }
+              ],
+              "loadedAddresses": {
+                "readonly": [
+                  "gBxS1f6uyyGPuW5MzGBukidSb71jdsCb5fZaoSzULE5"
+                ],
+                "writable": [
+                  "GgBaCs3NCBuZN12kCJgAW63ydqohFkHEdfdEXBPzLHq"
+                ]
+              },
+              "logMessages": [
+                "Program QWmroo4YnnMqYW3cnxWkFdaTxGD3P7vMSzwMHGbUzwF invoke [1]",
+                "Program log: golden fixture",
+                "Program QWmroo4YnnMqYW3cnxWkFdaTxGD3P7vMSzwMHGbUzwF failed: custom program error: 0x2a"
+              ],
+              "postBalances": [
+                45000,
+                1,
+                10000,
+                1
+              ],
+              "postTokenBalances": [
+                {
+                  "accountIndex": 2,
+                  "mint": "swqrv48gsrwpBFbftEwnP2vB4jckpvfGJfXkwaniLCC",
+                  "owner": "CktRuQ2mttgRGkXJtyksdKHjUdc2C4TgDzyB98oEzy8",
+                  "programId": "QWmroo4YnnMqYW3cnxWkFdaTxGD3P7vMSzwMHGbUzwF",
+                  "uiTokenAmount": {
+                    "amount": "1250000",
+                    "decimals": 6,
+                    "uiAmount": 1.25,
+                    "uiAmountString": "1.25"
+                  }
+                }
+              ],
+              "preBalances": [
+                50000,
+                1,
+                10000,
+                1
+              ],
+              "preTokenBalances": [
+                {
+                  "accountIndex": 2,
+                  "mint": "swqrv48gsrwpBFbftEwnP2vB4jckpvfGJfXkwaniLCC",
+                  "owner": "CktRuQ2mttgRGkXJtyksdKHjUdc2C4TgDzyB98oEzy8",
+                  "programId": "QWmroo4YnnMqYW3cnxWkFdaTxGD3P7vMSzwMHGbUzwF",
+                  "uiTokenAmount": {
+                    "amount": "1250000",
+                    "decimals": 6,
+                    "uiAmount": 1.25,
+                    "uiAmountString": "1.25"
+                  }
+                }
+              ],
+              "returnData": {
+                "data": [
+                  "AP8BKg==",
+                  "base64"
+                ],
+                "programId": "QWmroo4YnnMqYW3cnxWkFdaTxGD3P7vMSzwMHGbUzwF"
+              },
+              "rewards": [],
+              "status": {
+                "Err": {
+                  "InstructionError": [
+                    0,
+                    {
+                      "Custom": 42
+                    }
+                  ]
+                }
+              }
+            },
+            "transaction": {
+              "message": {
+                "accountKeys": [
+                  "CktRuQ2mttgRGkXJtyksdKHjUdc2C4TgDzyB98oEzy8",
+                  "QWmroo4YnnMqYW3cnxWkFdaTxGD3P7vMSzwMHGbUzwF"
+                ],
+                "addressTableLookups": [
+                  {
+                    "accountKey": "p2Yicb86aZig616Eav2VWG9vuXR5mEqhtzshZYBxzsV",
+                    "readonlyIndexes": [
+                      9
+                    ],
+                    "writableIndexes": [
+                      4
+                    ]
+                  }
+                ],
+                "header": {
+                  "numReadonlySignedAccounts": 0,
+                  "numReadonlyUnsignedAccounts": 1,
+                  "numRequiredSignatures": 1
+                },
+                "instructions": [
+                  {
+                    "accounts": [
+                      0,
+                      2,
+                      3
+                    ],
+                    "data": "1Je",
+                    "programIdIndex": 1,
+                    "stackHeight": 1
+                  }
+                ],
+                "recentBlockhash": "3mg7sM6RFEBHiiFotFNfvteH1WdFcc9cujKuPaqZdfDz"
+              },
+              "signatures": [
+                "2GLpKt9QByK3P3VPx7oy9P63wtJJqjB7FreXra3p25DLeNsWWtMcf27PoQN9eVd95E623c74sirmyVA1Kuij5fv6"
+              ]
+            },
+            "version": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "modern_confirmed",
+      "description": "Modern block at confirmed commitment",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":13,\"method\":\"getBlock\",\"params\":[302400011,{\"maxSupportedTransactionVersion\":0,\"encoding\":\"json\",\"commitment\":\"confirmed\"}]}",
+      "expect_kind": "result",
+      "expected_id": 13,
+      "expected_result": {
+        "blockHeight": 302399911,
+        "blockTime": 1902400011,
+        "blockhash": "3qbR1eZRqXUWroWKKYhbDmR3FfqTHfqSU8zZSxtANzYh",
+        "numRewardPartitions": 4,
+        "parentSlot": 302400010,
+        "previousBlockhash": "3mg7sM6RFEBHiiFotFNfvteH1WdFcc9cujKuPaqZdfDz",
+        "rewards": [
+          {
+            "commission": null,
+            "lamports": 2500,
+            "postBalance": 52500,
+            "pubkey": "US517G5965aydkZ46HS38QLi7UQiSojurfbQfKCELFx",
+            "rewardType": "Fee"
+          },
+          {
+            "commission": null,
+            "lamports": 1234,
+            "postBalance": 51234,
+            "pubkey": "YMN9Qj5jPNp7j14VPcML1B6xGgcPWVZUGLFU3Mnyfaf",
+            "rewardType": "Staking"
+          },
+          {
+            "commission": 7,
+            "lamports": 321,
+            "postBalance": 50321,
+            "pubkey": "cGfHiC6Kgg3FpFZvgwGcswsCRtp4aBP2fzuXRQPizuN",
+            "rewardType": "Voting"
+          }
+        ],
+        "transactions": [
+          {
+            "meta": {
+              "computeUnitsConsumed": 300,
+              "costUnits": 600,
+              "err": null,
+              "fee": 5000,
+              "innerInstructions": [
+                {
+                  "index": 0,
+                  "instructions": [
+                    {
+                      "accounts": [
+                        1
+                      ],
+                      "data": "1bM",
+                      "programIdIndex": 2,
+                      "stackHeight": 2
+                    }
+                  ]
+                }
+              ],
+              "loadedAddresses": {
+                "readonly": [],
+                "writable": []
+              },
+              "logMessages": [
+                "Program LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY invoke [1]",
+                "Program log: golden fixture",
+                "Program LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY success"
+              ],
+              "postBalances": [
+                44000,
+                11000,
+                1
+              ],
+              "postTokenBalances": [
+                {
+                  "accountIndex": 1,
+                  "mint": "swqrv48gsrwpBFbftEwnP2vB4jckpvfGJfXkwaniLCC",
+                  "owner": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+                  "programId": "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY",
+                  "uiTokenAmount": {
+                    "amount": "5",
+                    "decimals": 6,
+                    "uiAmount": 5e-06,
+                    "uiAmountString": "0.000005"
+                  }
+                }
+              ],
+              "preBalances": [
+                50000,
+                10000,
+                1
+              ],
+              "preTokenBalances": [
+                {
+                  "accountIndex": 1,
+                  "mint": "swqrv48gsrwpBFbftEwnP2vB4jckpvfGJfXkwaniLCC",
+                  "owner": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+                  "programId": "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY",
+                  "uiTokenAmount": {
+                    "amount": "1250000",
+                    "decimals": 6,
+                    "uiAmount": 1.25,
+                    "uiAmountString": "1.25"
+                  }
+                }
+              ],
+              "returnData": {
+                "data": [
+                  "AP8BKg==",
+                  "base64"
+                ],
+                "programId": "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY"
+              },
+              "rewards": [],
+              "status": {
+                "Ok": null
+              }
+            },
+            "transaction": {
+              "message": {
+                "accountKeys": [
+                  "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+                  "8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR",
+                  "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY"
+                ],
+                "header": {
+                  "numReadonlySignedAccounts": 0,
+                  "numReadonlyUnsignedAccounts": 1,
+                  "numRequiredSignatures": 1
+                },
+                "instructions": [
+                  {
+                    "accounts": [
+                      0,
+                      1
+                    ],
+                    "data": "1Pki",
+                    "programIdIndex": 2,
+                    "stackHeight": 1
+                  }
+                ],
+                "recentBlockhash": "3mg7sM6RFEBHiiFotFNfvteH1WdFcc9cujKuPaqZdfDz"
+              },
+              "signatures": [
+                "2FBJ7cbxxuf1W4NW2mSyB6AaHGW14mGULDxMEoLLaH7cuSCxkDo4nhgSCbxoFoaj1UcKXBcRzHLXT8TMaLfJUcY5"
+              ]
+            },
+            "version": "legacy"
+          },
+          {
+            "meta": {
+              "computeUnitsConsumed": 450,
+              "costUnits": 900,
+              "err": {
+                "InstructionError": [
+                  0,
+                  {
+                    "Custom": 42
+                  }
+                ]
+              },
+              "fee": 5000,
+              "innerInstructions": [
+                {
+                  "index": 0,
+                  "instructions": [
+                    {
+                      "accounts": [
+                        2,
+                        3
+                      ],
+                      "data": "1bM",
+                      "programIdIndex": 1,
+                      "stackHeight": 2
+                    }
+                  ]
+                }
+              ],
+              "loadedAddresses": {
+                "readonly": [
+                  "gBxS1f6uyyGPuW5MzGBukidSb71jdsCb5fZaoSzULE5"
+                ],
+                "writable": [
+                  "GgBaCs3NCBuZN12kCJgAW63ydqohFkHEdfdEXBPzLHq"
+                ]
+              },
+              "logMessages": [
+                "Program QWmroo4YnnMqYW3cnxWkFdaTxGD3P7vMSzwMHGbUzwF invoke [1]",
+                "Program log: golden fixture",
+                "Program QWmroo4YnnMqYW3cnxWkFdaTxGD3P7vMSzwMHGbUzwF failed: custom program error: 0x2a"
+              ],
+              "postBalances": [
+                45000,
+                1,
+                10000,
+                1
+              ],
+              "postTokenBalances": [
+                {
+                  "accountIndex": 2,
+                  "mint": "swqrv48gsrwpBFbftEwnP2vB4jckpvfGJfXkwaniLCC",
+                  "owner": "CktRuQ2mttgRGkXJtyksdKHjUdc2C4TgDzyB98oEzy8",
+                  "programId": "QWmroo4YnnMqYW3cnxWkFdaTxGD3P7vMSzwMHGbUzwF",
+                  "uiTokenAmount": {
+                    "amount": "1250000",
+                    "decimals": 6,
+                    "uiAmount": 1.25,
+                    "uiAmountString": "1.25"
+                  }
+                }
+              ],
+              "preBalances": [
+                50000,
+                1,
+                10000,
+                1
+              ],
+              "preTokenBalances": [
+                {
+                  "accountIndex": 2,
+                  "mint": "swqrv48gsrwpBFbftEwnP2vB4jckpvfGJfXkwaniLCC",
+                  "owner": "CktRuQ2mttgRGkXJtyksdKHjUdc2C4TgDzyB98oEzy8",
+                  "programId": "QWmroo4YnnMqYW3cnxWkFdaTxGD3P7vMSzwMHGbUzwF",
+                  "uiTokenAmount": {
+                    "amount": "1250000",
+                    "decimals": 6,
+                    "uiAmount": 1.25,
+                    "uiAmountString": "1.25"
+                  }
+                }
+              ],
+              "returnData": {
+                "data": [
+                  "AP8BKg==",
+                  "base64"
+                ],
+                "programId": "QWmroo4YnnMqYW3cnxWkFdaTxGD3P7vMSzwMHGbUzwF"
+              },
+              "rewards": [],
+              "status": {
+                "Err": {
+                  "InstructionError": [
+                    0,
+                    {
+                      "Custom": 42
+                    }
+                  ]
+                }
+              }
+            },
+            "transaction": {
+              "message": {
+                "accountKeys": [
+                  "CktRuQ2mttgRGkXJtyksdKHjUdc2C4TgDzyB98oEzy8",
+                  "QWmroo4YnnMqYW3cnxWkFdaTxGD3P7vMSzwMHGbUzwF"
+                ],
+                "addressTableLookups": [
+                  {
+                    "accountKey": "p2Yicb86aZig616Eav2VWG9vuXR5mEqhtzshZYBxzsV",
+                    "readonlyIndexes": [
+                      9
+                    ],
+                    "writableIndexes": [
+                      4
+                    ]
+                  }
+                ],
+                "header": {
+                  "numReadonlySignedAccounts": 0,
+                  "numReadonlyUnsignedAccounts": 1,
+                  "numRequiredSignatures": 1
+                },
+                "instructions": [
+                  {
+                    "accounts": [
+                      0,
+                      2,
+                      3
+                    ],
+                    "data": "1Je",
+                    "programIdIndex": 1,
+                    "stackHeight": 1
+                  }
+                ],
+                "recentBlockhash": "3mg7sM6RFEBHiiFotFNfvteH1WdFcc9cujKuPaqZdfDz"
+              },
+              "signatures": [
+                "2GLpKt9QByK3P3VPx7oy9P63wtJJqjB7FreXra3p25DLeNsWWtMcf27PoQN9eVd95E623c74sirmyVA1Kuij5fv6"
+              ]
+            },
+            "version": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "modern_parent_base64_shorthand",
+      "description": "Modern parent block using the base64 string shorthand",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":14,\"method\":\"getBlock\",\"params\":[302400010,\"base64\"]}",
+      "expect_kind": "result",
+      "expected_id": 14,
+      "expected_result": {
+        "blockHeight": 302399910,
+        "blockTime": 1902400010,
+        "blockhash": "3mg7sM6RFEBHiiFotFNfvteH1WdFcc9cujKuPaqZdfDz",
+        "numRewardPartitions": 4,
+        "parentSlot": 302400009,
+        "previousBlockhash": "3hkpj3dQevt4ad1JSx3ke1sWmMR3wYToMKfFLCnxtKuH",
+        "rewards": [
+          {
+            "commission": null,
+            "lamports": 2500,
+            "postBalance": 52500,
+            "pubkey": "US517G5965aydkZ46HS38QLi7UQiSojurfbQfKCELFx",
+            "rewardType": "Fee"
+          },
+          {
+            "commission": null,
+            "lamports": 1234,
+            "postBalance": 51234,
+            "pubkey": "YMN9Qj5jPNp7j14VPcML1B6xGgcPWVZUGLFU3Mnyfaf",
+            "rewardType": "Staking"
+          },
+          {
+            "commission": 7,
+            "lamports": 321,
+            "postBalance": 50321,
+            "pubkey": "cGfHiC6Kgg3FpFZvgwGcswsCRtp4aBP2fzuXRQPizuN",
+            "rewardType": "Voting"
+          }
+        ],
+        "transactions": [
+          {
+            "meta": {
+              "computeUnitsConsumed": 300,
+              "costUnits": 600,
+              "err": null,
+              "fee": 5000,
+              "innerInstructions": [
+                {
+                  "index": 0,
+                  "instructions": [
+                    {
+                      "accounts": [
+                        1
+                      ],
+                      "data": "1bM",
+                      "programIdIndex": 2,
+                      "stackHeight": 2
+                    }
+                  ]
+                }
+              ],
+              "loadedAddresses": {
+                "readonly": [],
+                "writable": []
+              },
+              "logMessages": [
+                "Program LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY invoke [1]",
+                "Program log: golden fixture",
+                "Program LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY success"
+              ],
+              "postBalances": [
+                44000,
+                11000,
+                1
+              ],
+              "postTokenBalances": [
+                {
+                  "accountIndex": 1,
+                  "mint": "swqrv48gsrwpBFbftEwnP2vB4jckpvfGJfXkwaniLCC",
+                  "owner": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+                  "programId": "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY",
+                  "uiTokenAmount": {
+                    "amount": "5",
+                    "decimals": 6,
+                    "uiAmount": 5e-06,
+                    "uiAmountString": "0.000005"
+                  }
+                }
+              ],
+              "preBalances": [
+                50000,
+                10000,
+                1
+              ],
+              "preTokenBalances": [
+                {
+                  "accountIndex": 1,
+                  "mint": "swqrv48gsrwpBFbftEwnP2vB4jckpvfGJfXkwaniLCC",
+                  "owner": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+                  "programId": "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY",
+                  "uiTokenAmount": {
+                    "amount": "1250000",
+                    "decimals": 6,
+                    "uiAmount": 1.25,
+                    "uiAmountString": "1.25"
+                  }
+                }
+              ],
+              "returnData": {
+                "data": [
+                  "AP8BKg==",
+                  "base64"
+                ],
+                "programId": "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY"
+              },
+              "rewards": [],
+              "status": {
+                "Ok": null
+              }
+            },
+            "transaction": [
+              "AT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0BAAEDAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQECAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgBAgIAAQQAASr/",
+              "base64"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "multiframe_json",
+      "description": "Transaction bytes, metadata and rewards each span three CRC-checked frames",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":15,\"method\":\"getBlock\",\"params\":[302400012,{\"encoding\":\"json\",\"maxSupportedTransactionVersion\":0,\"rewards\":true}]}",
+      "expect_kind": "result",
+      "expected_id": 15,
+      "expected_result": {
+        "blockHeight": 302399912,
+        "blockTime": 1902400012,
+        "blockhash": "3uWi9x2SRpmjztkpkr2WWeBoVq3exjXG2YfDWLvm8KsQ",
+        "numRewardPartitions": 4,
+        "parentSlot": 302400011,
+        "previousBlockhash": "3qbR1eZRqXUWroWKKYhbDmR3FfqTHfqSU8zZSxtANzYh",
+        "rewards": [
+          {
+            "commission": null,
+            "lamports": 2500,
+            "postBalance": 52500,
+            "pubkey": "US517G5965aydkZ46HS38QLi7UQiSojurfbQfKCELFx",
+            "rewardType": "Fee"
+          },
+          {
+            "commission": null,
+            "lamports": 1234,
+            "postBalance": 51234,
+            "pubkey": "YMN9Qj5jPNp7j14VPcML1B6xGgcPWVZUGLFU3Mnyfaf",
+            "rewardType": "Staking"
+          },
+          {
+            "commission": 7,
+            "lamports": 321,
+            "postBalance": 50321,
+            "pubkey": "cGfHiC6Kgg3FpFZvgwGcswsCRtp4aBP2fzuXRQPizuN",
+            "rewardType": "Voting"
+          }
+        ],
+        "transactions": [
+          {
+            "meta": {
+              "computeUnitsConsumed": 300,
+              "costUnits": 600,
+              "err": null,
+              "fee": 5000,
+              "innerInstructions": [
+                {
+                  "index": 0,
+                  "instructions": [
+                    {
+                      "accounts": [
+                        1
+                      ],
+                      "data": "1bM",
+                      "programIdIndex": 2,
+                      "stackHeight": 2
+                    }
+                  ]
+                }
+              ],
+              "loadedAddresses": {
+                "readonly": [],
+                "writable": []
+              },
+              "logMessages": [
+                "Program LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY invoke [1]",
+                "Program log: golden fixture",
+                "Program LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY success"
+              ],
+              "postBalances": [
+                44000,
+                11000,
+                1
+              ],
+              "postTokenBalances": [
+                {
+                  "accountIndex": 1,
+                  "mint": "swqrv48gsrwpBFbftEwnP2vB4jckpvfGJfXkwaniLCC",
+                  "owner": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+                  "programId": "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY",
+                  "uiTokenAmount": {
+                    "amount": "5",
+                    "decimals": 6,
+                    "uiAmount": 5e-06,
+                    "uiAmountString": "0.000005"
+                  }
+                }
+              ],
+              "preBalances": [
+                50000,
+                10000,
+                1
+              ],
+              "preTokenBalances": [
+                {
+                  "accountIndex": 1,
+                  "mint": "swqrv48gsrwpBFbftEwnP2vB4jckpvfGJfXkwaniLCC",
+                  "owner": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+                  "programId": "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY",
+                  "uiTokenAmount": {
+                    "amount": "1250000",
+                    "decimals": 6,
+                    "uiAmount": 1.25,
+                    "uiAmountString": "1.25"
+                  }
+                }
+              ],
+              "returnData": {
+                "data": [
+                  "AP8BKg==",
+                  "base64"
+                ],
+                "programId": "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY"
+              },
+              "rewards": [],
+              "status": {
+                "Ok": null
+              }
+            },
+            "transaction": {
+              "message": {
+                "accountKeys": [
+                  "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+                  "8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR",
+                  "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY"
+                ],
+                "header": {
+                  "numReadonlySignedAccounts": 0,
+                  "numReadonlyUnsignedAccounts": 1,
+                  "numRequiredSignatures": 1
+                },
+                "instructions": [
+                  {
+                    "accounts": [
+                      0,
+                      1
+                    ],
+                    "data": "1Pki",
+                    "programIdIndex": 2,
+                    "stackHeight": 1
+                  }
+                ],
+                "recentBlockhash": "3qbR1eZRqXUWroWKKYhbDmR3FfqTHfqSU8zZSxtANzYh"
+              },
+              "signatures": [
+                "2HWLY9gqR2y5G2cHsUAy7g1XcW6cch5kBVLiULmHTsK4PKY4HYvAXLYMQCmW3BfZ8yZia2bhmAP2Vqrf5Un9gjJ7"
+              ]
+            },
+            "version": "legacy"
+          }
+        ]
+      }
+    },
+    {
+      "id": "bincode_json",
+      "description": "Pre-epoch-157 bincode metadata and rewards encoded as json",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":16,\"method\":\"getBlock\",\"params\":[43200001,{\"encoding\":\"json\",\"rewards\":true}]}",
+      "expect_kind": "result",
+      "expected_id": 16,
+      "expected_result": {
+        "blockHeight": 43199901,
+        "blockTime": 1643200001,
+        "blockhash": "36VASLSKLFD2KokjXG7V28veZvXEsyHRKefLonPaAKzv",
+        "parentSlot": 43200000,
+        "previousBlockhash": "32ZsJ2yJjwuoBiWE5xnZjG9tKmK3CubbmEzgkQLyQzgD",
+        "rewards": [
+          {
+            "commission": null,
+            "lamports": 2500,
+            "postBalance": 50000,
+            "pubkey": "US517G5965aydkZ46HS38QLi7UQiSojurfbQfKCELFx",
+            "rewardType": "Fee"
+          }
+        ],
+        "transactions": [
+          {
+            "meta": {
+              "computeUnitsConsumed": 150,
+              "err": null,
+              "fee": 5000,
+              "innerInstructions": null,
+              "loadedAddresses": {
+                "readonly": [],
+                "writable": []
+              },
+              "logMessages": [
+                "Program LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY success"
+              ],
+              "postBalances": [
+                44000,
+                11000,
+                1
+              ],
+              "postTokenBalances": [
+                {
+                  "accountIndex": 1,
+                  "mint": "swqrv48gsrwpBFbftEwnP2vB4jckpvfGJfXkwaniLCC",
+                  "owner": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+                  "programId": "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY",
+                  "uiTokenAmount": {
+                    "amount": "1250000",
+                    "decimals": 6,
+                    "uiAmount": 1.25,
+                    "uiAmountString": "1.25"
+                  }
+                }
+              ],
+              "preBalances": [
+                50000,
+                10000,
+                1
+              ],
+              "preTokenBalances": [
+                {
+                  "accountIndex": 1,
+                  "mint": "swqrv48gsrwpBFbftEwnP2vB4jckpvfGJfXkwaniLCC",
+                  "owner": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+                  "programId": "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY",
+                  "uiTokenAmount": {
+                    "amount": "1000000",
+                    "decimals": 6,
+                    "uiAmount": 1.0,
+                    "uiAmountString": "1"
+                  }
+                }
+              ],
+              "rewards": [],
+              "status": {
+                "Ok": null
+              }
+            },
+            "transaction": {
+              "message": {
+                "accountKeys": [
+                  "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+                  "8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR",
+                  "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY"
+                ],
+                "header": {
+                  "numReadonlySignedAccounts": 0,
+                  "numReadonlyUnsignedAccounts": 1,
+                  "numRequiredSignatures": 1
+                },
+                "instructions": [
+                  {
+                    "accounts": [
+                      0,
+                      1
+                    ],
+                    "data": "1Pki",
+                    "programIdIndex": 2,
+                    "stackHeight": 1
+                  }
+                ],
+                "recentBlockhash": "32ZsJ2yJjwuoBiWE5xnZjG9tKmK3CubbmEzgkQLyQzgD"
+              },
+              "signatures": [
+                "22NZnfeBVDSeqE4euuTyVt2KxUidYAHUAGLLTKU8gY2hm4twGud2FCwtboXvxD8AJEMdkYBSESbmhCkCK51dpyMt"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "bincode_base64",
+      "description": "Pre-epoch-157 bincode metadata and rewards encoded as base64",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":17,\"method\":\"getBlock\",\"params\":[43200001,{\"encoding\":\"base64\",\"rewards\":true}]}",
+      "expect_kind": "result",
+      "expected_id": 17,
+      "expected_result": {
+        "blockHeight": 43199901,
+        "blockTime": 1643200001,
+        "blockhash": "36VASLSKLFD2KokjXG7V28veZvXEsyHRKefLonPaAKzv",
+        "parentSlot": 43200000,
+        "previousBlockhash": "32ZsJ2yJjwuoBiWE5xnZjG9tKmK3CubbmEzgkQLyQzgD",
+        "rewards": [
+          {
+            "commission": null,
+            "lamports": 2500,
+            "postBalance": 50000,
+            "pubkey": "US517G5965aydkZ46HS38QLi7UQiSojurfbQfKCELFx",
+            "rewardType": "Fee"
+          }
+        ],
+        "transactions": [
+          {
+            "meta": {
+              "computeUnitsConsumed": 150,
+              "err": null,
+              "fee": 5000,
+              "innerInstructions": null,
+              "loadedAddresses": {
+                "readonly": [],
+                "writable": []
+              },
+              "logMessages": [
+                "Program LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY success"
+              ],
+              "postBalances": [
+                44000,
+                11000,
+                1
+              ],
+              "postTokenBalances": [
+                {
+                  "accountIndex": 1,
+                  "mint": "swqrv48gsrwpBFbftEwnP2vB4jckpvfGJfXkwaniLCC",
+                  "owner": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+                  "programId": "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY",
+                  "uiTokenAmount": {
+                    "amount": "1250000",
+                    "decimals": 6,
+                    "uiAmount": 1.25,
+                    "uiAmountString": "1.25"
+                  }
+                }
+              ],
+              "preBalances": [
+                50000,
+                10000,
+                1
+              ],
+              "preTokenBalances": [
+                {
+                  "accountIndex": 1,
+                  "mint": "swqrv48gsrwpBFbftEwnP2vB4jckpvfGJfXkwaniLCC",
+                  "owner": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+                  "programId": "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY",
+                  "uiTokenAmount": {
+                    "amount": "1000000",
+                    "decimals": 6,
+                    "uiAmount": 1.0,
+                    "uiAmountString": "1"
+                  }
+                }
+              ],
+              "rewards": [],
+              "status": {
+                "Ok": null
+              }
+            },
+            "transaction": [
+              "ATMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMBAAEDAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQECAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4BAgIAAQQAASr/",
+              "base64"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "bincode_json_parsed",
+      "description": "Pre-epoch-157 bincode metadata and rewards encoded as jsonParsed",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":18,\"method\":\"getBlock\",\"params\":[43200001,{\"encoding\":\"jsonParsed\",\"rewards\":true}]}",
+      "expect_kind": "result",
+      "expected_id": 18,
+      "expected_result": {
+        "blockHeight": 43199901,
+        "blockTime": 1643200001,
+        "blockhash": "36VASLSKLFD2KokjXG7V28veZvXEsyHRKefLonPaAKzv",
+        "parentSlot": 43200000,
+        "previousBlockhash": "32ZsJ2yJjwuoBiWE5xnZjG9tKmK3CubbmEzgkQLyQzgD",
+        "rewards": [
+          {
+            "commission": null,
+            "lamports": 2500,
+            "postBalance": 50000,
+            "pubkey": "US517G5965aydkZ46HS38QLi7UQiSojurfbQfKCELFx",
+            "rewardType": "Fee"
+          }
+        ],
+        "transactions": [
+          {
+            "meta": {
+              "computeUnitsConsumed": 150,
+              "err": null,
+              "fee": 5000,
+              "innerInstructions": null,
+              "logMessages": [
+                "Program LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY success"
+              ],
+              "postBalances": [
+                44000,
+                11000,
+                1
+              ],
+              "postTokenBalances": [
+                {
+                  "accountIndex": 1,
+                  "mint": "swqrv48gsrwpBFbftEwnP2vB4jckpvfGJfXkwaniLCC",
+                  "owner": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+                  "programId": "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY",
+                  "uiTokenAmount": {
+                    "amount": "1250000",
+                    "decimals": 6,
+                    "uiAmount": 1.25,
+                    "uiAmountString": "1.25"
+                  }
+                }
+              ],
+              "preBalances": [
+                50000,
+                10000,
+                1
+              ],
+              "preTokenBalances": [
+                {
+                  "accountIndex": 1,
+                  "mint": "swqrv48gsrwpBFbftEwnP2vB4jckpvfGJfXkwaniLCC",
+                  "owner": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+                  "programId": "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY",
+                  "uiTokenAmount": {
+                    "amount": "1000000",
+                    "decimals": 6,
+                    "uiAmount": 1.0,
+                    "uiAmountString": "1"
+                  }
+                }
+              ],
+              "rewards": [],
+              "status": {
+                "Ok": null
+              }
+            },
+            "transaction": {
+              "message": {
+                "accountKeys": [
+                  {
+                    "pubkey": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+                    "signer": true,
+                    "source": "transaction",
+                    "writable": true
+                  },
+                  {
+                    "pubkey": "8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR",
+                    "signer": false,
+                    "source": "transaction",
+                    "writable": true
+                  },
+                  {
+                    "pubkey": "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY",
+                    "signer": false,
+                    "source": "transaction",
+                    "writable": false
+                  }
+                ],
+                "instructions": [
+                  {
+                    "accounts": [
+                      "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+                      "8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR"
+                    ],
+                    "data": "1Pki",
+                    "programId": "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY",
+                    "stackHeight": 1
+                  }
+                ],
+                "recentBlockhash": "32ZsJ2yJjwuoBiWE5xnZjG9tKmK3CubbmEzgkQLyQzgD"
+              },
+              "signatures": [
+                "22NZnfeBVDSeqE4euuTyVt2KxUidYAHUAGLLTKU8gY2hm4twGud2FCwtboXvxD8AJEMdkYBSESbmhCkCK51dpyMt"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "method_get_transaction_removed",
+      "description": "getTransaction is outside the OnlyBlocks RPC surface",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":19,\"method\":\"getTransaction\",\"params\":[\"2FBJ7cbxxuf1W4NW2mSyB6AaHGW14mGULDxMEoLLaH7cuSCxkDo4nhgSCbxoFoaj1UcKXBcRzHLXT8TMaLfJUcY5\",{\"slot\":302400011}]}",
+      "expect_kind": "error",
+      "expected_id": 19,
+      "expected_error_code": -32601
+    },
+    {
+      "id": "method_get_slot_unsupported",
+      "description": "getSlot is outside the OnlyBlocks RPC surface",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":20,\"method\":\"getSlot\"}",
+      "expect_kind": "error",
+      "expected_id": 20,
+      "expected_error_code": -32601
+    },
+    {
+      "id": "malformed_json",
+      "description": "Malformed JSON request body",
+      "raw_body": "{bad",
+      "expect_kind": "error",
+      "expected_id": null,
+      "expected_error_code": -32700
+    },
+    {
+      "id": "invalid_empty_object",
+      "description": "Empty JSON-RPC request object",
+      "raw_body": "{}",
+      "expect_kind": "error",
+      "expected_id": null,
+      "expected_error_code": -32600
+    },
+    {
+      "id": "invalid_rpc_version",
+      "description": "Unsupported JSON-RPC version",
+      "raw_body": "{\"jsonrpc\":\"1.0\",\"id\":1,\"method\":\"getHealth\"}",
+      "expect_kind": "error",
+      "expected_id": 1,
+      "expected_error_code": -32600
+    },
+    {
+      "id": "invalid_empty_batch",
+      "description": "Empty JSON-RPC batch",
+      "raw_body": "[]",
+      "expect_kind": "error",
+      "expected_id": null,
+      "expected_error_code": -32600
+    },
+    {
+      "id": "invalid_scalar_body",
+      "description": "JSON-RPC request body is a number",
+      "raw_body": "42",
+      "expect_kind": "error",
+      "expected_id": null,
+      "expected_error_code": -32600
+    },
+    {
+      "id": "invalid_block_empty_params",
+      "description": "getBlock with no slot",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":26,\"method\":\"getBlock\",\"params\":[]}",
+      "expect_kind": "error",
+      "expected_id": 26,
+      "expected_error_code": -32602
+    },
+    {
+      "id": "invalid_slot_string",
+      "description": "Slot is a string",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":27,\"method\":\"getBlock\",\"params\":[\"bad\"]}",
+      "expect_kind": "error",
+      "expected_id": 27,
+      "expected_error_code": -32602
+    },
+    {
+      "id": "invalid_slot_negative",
+      "description": "Slot is negative",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":28,\"method\":\"getBlock\",\"params\":[-1]}",
+      "expect_kind": "error",
+      "expected_id": 28,
+      "expected_error_code": -32602
+    },
+    {
+      "id": "invalid_encoding",
+      "description": "Unsupported encoding shorthand",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":29,\"method\":\"getBlock\",\"params\":[302400011,\"bogusEnc\"]}",
+      "expect_kind": "error",
+      "expected_id": 29,
+      "expected_error_code": -32602
+    },
+    {
+      "id": "invalid_processed_commitment",
+      "description": "getBlock rejects processed commitment",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":30,\"method\":\"getBlock\",\"params\":[302400011,{\"commitment\":\"processed\"}]}",
+      "expect_kind": "error",
+      "expected_id": 30,
+      "expected_error_code": -32602
+    },
+    {
+      "id": "invalid_binary_accounts",
+      "description": "Account details require JSON encoding",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":31,\"method\":\"getBlock\",\"params\":[302400011,{\"encoding\":\"base64\",\"transactionDetails\":\"accounts\"}]}",
+      "expect_kind": "error",
+      "expected_id": 31,
+      "expected_error_code": -32602
+    },
+    {
+      "id": "invalid_health_params",
+      "description": "getHealth does not accept arguments",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":32,\"method\":\"getHealth\",\"params\":[123]}",
+      "expect_kind": "error",
+      "expected_id": 32,
+      "expected_error_code": -32602
+    },
+    {
+      "id": "skipped_slot",
+      "description": "Archived epoch with a zero-length slot range",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":33,\"method\":\"getBlock\",\"params\":[302400004]}",
+      "expect_kind": "error",
+      "expected_id": 33,
+      "expected_error_code": -32007
+    },
+    {
+      "id": "unarchived_epoch",
+      "description": "Epoch 9999 returns HTTP 404 for slot ranges",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":34,\"method\":\"getBlock\",\"params\":[4319568000]}",
+      "expect_kind": "error",
+      "expected_id": 34,
+      "expected_error_code": -32004
+    },
+    {
+      "id": "unsupported_transaction_version",
+      "description": "v0 block requires a supported transaction version",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":35,\"method\":\"getBlock\",\"params\":[302400011]}",
+      "expect_kind": "error",
+      "expected_id": 35,
+      "expected_error_code": -32015
+    },
+    {
+      "id": "batch_mixed",
+      "description": "Batch mixing health, block signatures and removed method",
+      "raw_body": "[{\"jsonrpc\":\"2.0\",\"id\":\"batch-health\",\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":\"batch-block\",\"method\":\"getBlock\",\"params\":[302400011,{\"transactionDetails\":\"signatures\"}]},{\"jsonrpc\":\"2.0\",\"id\":\"batch-removed\",\"method\":\"getTransaction\",\"params\":[\"2FBJ7cbxxuf1W4NW2mSyB6AaHGW14mGULDxMEoLLaH7cuSCxkDo4nhgSCbxoFoaj1UcKXBcRzHLXT8TMaLfJUcY5\",{\"slot\":302400011}]}]",
+      "expect_kind": "batch",
+      "expected_batch": [
+        {
+          "expect_kind": "result",
+          "expected_id": "batch-health",
+          "expected_result": "ok"
+        },
+        {
+          "expect_kind": "result",
+          "expected_id": "batch-block",
+          "expected_result": {
+            "blockHeight": 302399911,
+            "blockTime": 1902400011,
+            "blockhash": "3qbR1eZRqXUWroWKKYhbDmR3FfqTHfqSU8zZSxtANzYh",
+            "numRewardPartitions": 4,
+            "parentSlot": 302400010,
+            "previousBlockhash": "3mg7sM6RFEBHiiFotFNfvteH1WdFcc9cujKuPaqZdfDz",
+            "rewards": [
+              {
+                "commission": null,
+                "lamports": 2500,
+                "postBalance": 52500,
+                "pubkey": "US517G5965aydkZ46HS38QLi7UQiSojurfbQfKCELFx",
+                "rewardType": "Fee"
+              },
+              {
+                "commission": null,
+                "lamports": 1234,
+                "postBalance": 51234,
+                "pubkey": "YMN9Qj5jPNp7j14VPcML1B6xGgcPWVZUGLFU3Mnyfaf",
+                "rewardType": "Staking"
+              },
+              {
+                "commission": 7,
+                "lamports": 321,
+                "postBalance": 50321,
+                "pubkey": "cGfHiC6Kgg3FpFZvgwGcswsCRtp4aBP2fzuXRQPizuN",
+                "rewardType": "Voting"
+              }
+            ],
+            "signatures": [
+              "2FBJ7cbxxuf1W4NW2mSyB6AaHGW14mGULDxMEoLLaH7cuSCxkDo4nhgSCbxoFoaj1UcKXBcRzHLXT8TMaLfJUcY5",
+              "2GLpKt9QByK3P3VPx7oy9P63wtJJqjB7FreXra3p25DLeNsWWtMcf27PoQN9eVd95E623c74sirmyVA1Kuij5fv6"
+            ]
+          }
+        },
+        {
+          "expect_kind": "error",
+          "expected_id": "batch-removed",
+          "expected_error_code": -32601
+        }
+      ]
+    }
+  ]
+}
