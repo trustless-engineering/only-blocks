@@ -70,6 +70,7 @@ leaves each server:
 | **0 disk bytes** | No file is created, written, renamed or deleted after start-up, and the harness watches a private `TMPDIR` to check. |
 | **Bounded memory** | CAR slices are capped at 128 MiB before the request is sent, and Zstandard output is capped at 512 MiB as it grows. Request bodies over 1 MiB are refused. |
 | **0 third-party dependencies** | Each server uses only its language's standard library and the OS. No package manager runs at build time. |
+| **A single process** | Each server is one OS process, with only the exceptions [SPEC §1](SPEC.md#1-core-philosophy) allows. BEAM forks its own port helpers. `bash-awk`, whose language is the shell, pipes Range bytes through `awk`, `sh` and `od`. `https://` reads may spawn the system `curl` ([§3.3](SPEC.md#33-tls--https-transport-exception)). |
 
 ## How it works
 
@@ -142,8 +143,9 @@ GET /700/epoch-700.car               Range: bytes=offset-(offset+length-1)  → 
     `"none"` never touches transactions, and `rewards: false` never touches
     the Rewards node.
 
-**Range reads per request**, as measured by the mock origin's counters
-during the benchmark:
+**Range reads per request**, counted by the mock origin. `bench.py`
+recorded the cold and warm rows, and the conformance runner checks the
+zero-request row on every run:
 
 | Request | `slot-ranges.raw` reads | `.car` reads |
 |---|:-:|:-:|
@@ -410,13 +412,15 @@ on every push to `main` and every pull request. It never contacts
 * **`implementation`** is a `fail-fast: false` matrix, one job per
   implementation, on an Apple Silicon `macos-15` runner. Each job installs
   only the toolchain its `build.sh` and `run.sh` name, through official
-  `setup-*` actions or Homebrew. It then runs the golden conformance suite
-  and the security audit for that one implementation.
+  `setup-*` actions or Homebrew. Before testing, it resolves each tool on the
+  same `PATH` the harness uses and fails if the version is wrong, so a
+  preinstalled copy cannot quietly stand in. It then runs the golden
+  conformance suite and the security audit for that one implementation.
 
 | CI status | Implementations |
 |---|---|
-| **Required** | `arm64-asm` `c` `cpp` `rust` `go` `python` `javascript-node` `typescript-deno` `bun` `java` `csharp` `perl` `ruby` `tcl` `php` `erlang` `ocaml` |
-| **Best effort** (`continue-on-error`: the CI toolchain differs from the benchmark host's) | `kotlin` `elixir` `fortran` `haskell` `swift` `bash-awk` |
+| **Required** | `arm64-asm` `c` `cpp` `rust` `go` `python` `javascript-node` `typescript-deno` `bun` `java` `csharp` `perl` `ruby` `tcl` `php` `ocaml` |
+| **Best effort** (`continue-on-error`: the CI toolchain differs from the benchmark host's, or comes from the deprecated `erlang@26` formula) | `erlang` `kotlin` `elixir` `fortran` `haskell` `swift` `bash-awk` |
 | **Not in CI** | `zig`: its `build.sh` provisions Zig only through `nix shell --offline` |
 
 The live mainnet probes and the benchmark stay manual (`make live`,

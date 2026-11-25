@@ -77,9 +77,10 @@ jobs:
           # Homebrew formulae at the major versions the READMEs name.
           - {impl: tcl, experimental: false}
           - {impl: php, experimental: false}
-          - {impl: erlang, experimental: false}
           - {impl: ocaml, experimental: false}
-          # Toolchain differs from the benchmarked one.
+          # Toolchain differs from the benchmarked one, or (erlang@26) comes
+          # from a deprecated Homebrew formula that may be disabled.
+          - {impl: erlang, experimental: true}
           - {impl: kotlin, experimental: true}
           - {impl: elixir, experimental: true}
           - {impl: fortran, experimental: true}
@@ -145,29 +146,53 @@ jobs:
             bash-awk) brew install bash ;;
           esac
 
-      - name: Show the toolchain
+      # The setup-* actions append to PATH, but conformance/runner.py puts
+      # ~/.cargo/bin, ~/.nix-profile/bin and /opt/homebrew/bin first. Unlink
+      # any Homebrew copy that would shadow the pinned version.
+      - name: Keep Homebrew from shadowing the pinned toolchain
+        if: contains(fromJSON('["go","javascript-node","typescript-deno","bun"]'), matrix.impl)
         run: |
-          uname -a
-          python3.11 --version
+          for formula in go node deno bun; do
+            if brew list --formula "$formula" >/dev/null 2>&1; then
+              brew unlink "$formula"
+            fi
+          done
+
+      - name: Check the toolchain the harness will run
+        run: |
+          # The same PATH order as child_env() in conformance/runner.py.
+          export PATH="$HOME/.cargo/bin:$HOME/.nix-profile/bin:/opt/homebrew/bin:$PATH"
+          want() {  # want <regex> <command...>: print its first line, fail on a mismatch
+            local pattern=$1; shift
+            local out; out=$("$@" 2>&1 | head -n 1)
+            echo "$* -> $out"
+            grep -Eq "$pattern" <<<"$out" || { echo "::error::expected /$pattern/ from: $*"; exit 1; }
+          }
+          uname -mrs
+          want '^Python 3\.11\.' python3.11 --version
           case "${{ matrix.impl }}" in
-            arm64-asm|c|cpp) clang --version ;;
-            rust)            cargo --version ;;
-            go)              go version ;;
-            javascript-node) node --version ;;
-            typescript-deno) deno --version ;;
-            bun)             bun --version ;;
-            java|kotlin)     java -version 2>&1 ;;
-            csharp)          dotnet --list-sdks ;;
-            perl)            /usr/bin/perl -v | sed -n 2p ;;
-            ruby)            /usr/bin/ruby --version ;;
-            tcl)             echo 'puts [info patchlevel]' | /opt/homebrew/bin/tclsh ;;
-            php)             php --version ;;
-            erlang|elixir)   erl -noshell -eval 'io:format("OTP ~s~n",[erlang:system_info(otp_release)]),halt().' ;;
-            ocaml)           ocamlopt -version ;;
-            fortran)         /opt/homebrew/bin/gfortran --version ;;
-            haskell)         ghc --version ;;
-            swift)           /usr/bin/swiftc --version ;;
-            bash-awk)        /opt/homebrew/bin/bash --version | head -n 1; awk --version ;;
+            arm64-asm|c|cpp) want 'clang version' clang --version ;;
+            rust)            want '^cargo ' cargo --version ;;
+            go)              want 'go1\.25\.' go version ;;
+            javascript-node) want '^v25\.' node --version ;;
+            typescript-deno) want '^deno 2\.6\.' deno --version ;;
+            bun)             want '^1\.4\.' bun --version ;;
+            java)            PATH="/opt/homebrew/opt/openjdk@17/bin:$PATH" want '"(1[7-9]|[2-9][0-9])\.' java -version ;;
+            kotlin)          want 'kotlinc-jvm' kotlinc -version ;;
+            csharp)          want '^8\.' sh -c 'dotnet --list-sdks | grep -m1 "^8\."' ;;
+            perl)            want '^v5\.' /usr/bin/perl -e 'print "$^V\n"' ;;
+            ruby)            want '^ruby 2\.6\.' /usr/bin/ruby --version ;;
+            tcl)             want '^9\.' /opt/homebrew/bin/tclsh <<<'puts [info patchlevel]' ;;
+            php)             want '^PHP 8\.' php --version ;;
+            erlang)          want '^OTP 26' erl -noshell -eval 'io:format("OTP ~s~n",[erlang:system_info(otp_release)]),halt().' ;;
+            elixir)          want '^Elixir ' sh -c 'elixir --version | grep "^Elixir"' ;;
+            ocaml)           want '^5\.' ocamlopt -version ;;
+            fortran)         want 'GNU Fortran' /opt/homebrew/bin/gfortran --version ;;
+            haskell)         want 'Glasgow Haskell' ghc --version ;;
+            swift)           want 'Swift version 6\.' /usr/bin/swiftc --version ;;
+            bash-awk)        want '^GNU bash, version 5\.3' bash --version
+                             want '/accept$' ls "$(brew --prefix bash)/lib/bash/accept"
+                             want '^awk version' awk --version ;;
           esac
 
       - name: Golden conformance (offline)
