@@ -1,0 +1,2569 @@
+{
+  "schema_version": 1,
+  "source_revision": "b55e98fc1ce90c7f3765c9a662756483e651b6f9",
+  "started_at_utc": "2026-11-25T19:06:24.005749+00:00",
+  "host": {
+    "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+    "logical_cpus": 12,
+    "python": "3.14.7",
+    "cloc": "2.12"
+  },
+  "method": {
+    "offline_fixture": "modern_json_full",
+    "offline_slot": 302400011,
+    "warm_requests": 30,
+    "latency": "One loopback HTTP connection per RPC, including client JSON decoding. p95 uses linear interpolation.",
+    "startup": "Launcher setup through first valid getHealth, with a 50 ms readiness polling interval.",
+    "loc": "cloc over tracked source files including tests, excluding build.sh and run.sh.",
+    "size": "Uncompressed tracked code and runnable binary/module files. Runtime installations and build intermediates are excluded.",
+    "build": "One build.sh invocation from a clean source tree with existing toolchain caches.",
+    "rss": "Peak sampled aggregate process-group RSS via ps at 100 ms intervals plus a post-workload sample. Short-lived peaks can be missed and shared pages can be counted twice.",
+    "isolation": "One implementation at a time. Ambient host activity was not controlled.",
+    "live": "Direct HTTPS. One RPC at a time with a pause before every getBlock. Internal range requests and retries are governed by each implementation.",
+    "live_origin": "https://files.old-faithful.net",
+    "live_pause_before_getblock_seconds": 3
+  },
+  "implementations": [
+    {
+      "impl": "arm64-asm",
+      "offline": {
+        "status": "passed",
+        "loc": 8276,
+        "source_kib": 184.1572265625,
+        "build_seconds": 0.48824300011619925,
+        "binary_kib": 138.765625,
+        "artifact_files": [
+          "bin/onlyblocks"
+        ],
+        "startup_to_health_ms": 63.83133307099342,
+        "cold_getblock_ms": 2.8565418906509876,
+        "cold_upstream": {
+          "slot_range_requests": 2,
+          "car_requests": 2,
+          "total_requests": 4,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_upstream": {
+          "slot_range_requests": 0,
+          "car_requests": 30,
+          "total_requests": 30,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_getblock_samples_ms": [
+          0.9124996140599251,
+          0.7000421173870564,
+          0.6991252303123474,
+          0.6691659800708294,
+          0.6757918745279312,
+          0.6564161740243435,
+          0.6287912838160992,
+          0.5622496828436852,
+          0.5785832181572914,
+          0.5821250379085541,
+          0.626459252089262,
+          0.5770828574895859,
+          0.5642501637339592,
+          0.5232077091932297,
+          0.505249947309494,
+          0.49116695299744606,
+          0.48662489280104637,
+          0.4747076891362667,
+          0.49687502905726433,
+          0.49000000581145287,
+          0.4913327284157276,
+          0.498209148645401,
+          0.4925830289721489,
+          0.48791710287332535,
+          0.5540843121707439,
+          0.6275419145822525,
+          0.5272910930216312,
+          0.5354159511625767,
+          0.5210000090301037,
+          0.5086669698357582
+        ],
+        "warm_getblock_p50_ms": 0.5447501316666603,
+        "warm_getblock_p95_ms": 0.6996295182034373,
+        "peak_rss_mib": 5.96875
+      },
+      "live": {
+        "status": "passed",
+        "checks": {
+          "302400001": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "KPY8YHhZTuKXuA5ncyMrhWmLwfEq6ZmLzwYxF1VKneo",
+              "previousBlockhash": "HTCes91cfwRratW4babPCUqe54N8LqCmx7UMC8fsBmuQ",
+              "parentSlot": 302400000,
+              "blockTime": 1732048881,
+              "blockHeight": 280880470,
+              "transaction_count": 140,
+              "first_transaction_fee": 5000
+            }
+          },
+          "302400004": {
+            "status": "passed",
+            "error_code": -32007
+          },
+          "43200000": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "HVHEgGRbukDHtRysZFfbfy4ssdWKW1gDY6gsngCycrvf",
+              "previousBlockhash": "47PrqQ4MJrT4G2GB7uHk5CdZadTKspB5HgDszzxHPJc2",
+              "parentSlot": 43199999,
+              "blockTime": 1603254141,
+              "blockHeight": null,
+              "transaction_count": 208,
+              "first_transaction_fee": 5000
+            }
+          },
+          "getTransaction": {
+            "status": "passed",
+            "error_code": -32601
+          }
+        }
+      }
+    },
+    {
+      "impl": "bash-awk",
+      "offline": {
+        "status": "passed",
+        "loc": 2075,
+        "source_kib": 88.73828125,
+        "build_seconds": null,
+        "binary_kib": null,
+        "startup_to_health_ms": 64.72662510350347,
+        "cold_getblock_ms": 77.5613752193749,
+        "cold_upstream": {
+          "slot_range_requests": 2,
+          "car_requests": 2,
+          "total_requests": 4,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_upstream": {
+          "slot_range_requests": 0,
+          "car_requests": 30,
+          "total_requests": 30,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_getblock_samples_ms": [
+          46.18287505581975,
+          45.67791614681482,
+          45.80525029450655,
+          45.15074985101819,
+          45.72429182007909,
+          45.292542316019535,
+          46.37470841407776,
+          46.511916909366846,
+          44.94812525808811,
+          45.49441719427705,
+          46.57379165291786,
+          45.46858323737979,
+          45.3877910040319,
+          45.8966251462698,
+          45.76029209420085,
+          46.24766577035189,
+          44.979500118643045,
+          45.40825029835105,
+          45.11466668918729,
+          43.73754234984517,
+          43.87675039470196,
+          44.79566682130098,
+          44.692291878163815,
+          45.02920899540186,
+          45.97883298993111,
+          44.63237524032593,
+          44.917082879692316,
+          44.261666014790535,
+          44.10416726022959,
+          45.475332997739315
+        ],
+        "warm_getblock_p50_ms": 45.39802065119147,
+        "warm_getblock_p95_ms": 46.45017308648676,
+        "peak_rss_mib": 22.15625
+      },
+      "live": {
+        "status": "passed",
+        "checks": {
+          "302400001": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "KPY8YHhZTuKXuA5ncyMrhWmLwfEq6ZmLzwYxF1VKneo",
+              "previousBlockhash": "HTCes91cfwRratW4babPCUqe54N8LqCmx7UMC8fsBmuQ",
+              "parentSlot": 302400000,
+              "blockTime": 1732048881,
+              "blockHeight": 280880470,
+              "transaction_count": 140,
+              "first_transaction_fee": 5000
+            }
+          },
+          "302400004": {
+            "status": "passed",
+            "error_code": -32007
+          },
+          "43200000": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "HVHEgGRbukDHtRysZFfbfy4ssdWKW1gDY6gsngCycrvf",
+              "previousBlockhash": "47PrqQ4MJrT4G2GB7uHk5CdZadTKspB5HgDszzxHPJc2",
+              "parentSlot": 43199999,
+              "blockTime": 1603254141,
+              "blockHeight": null,
+              "transaction_count": 208,
+              "first_transaction_fee": 5000
+            }
+          },
+          "getTransaction": {
+            "status": "passed",
+            "error_code": -32601
+          }
+        }
+      }
+    },
+    {
+      "impl": "bun",
+      "offline": {
+        "status": "passed",
+        "loc": 1527,
+        "source_kib": 57.38671875,
+        "build_seconds": null,
+        "binary_kib": null,
+        "startup_to_health_ms": 64.71216678619385,
+        "cold_getblock_ms": 5.8936672285199165,
+        "cold_upstream": {
+          "slot_range_requests": 2,
+          "car_requests": 2,
+          "total_requests": 4,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_upstream": {
+          "slot_range_requests": 0,
+          "car_requests": 30,
+          "total_requests": 30,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_getblock_samples_ms": [
+          1.424041111022234,
+          1.1697923764586449,
+          1.1629587970674038,
+          1.196499913930893,
+          1.2121251784265041,
+          1.1769584380090237,
+          1.0397499427199364,
+          1.8967920914292336,
+          1.1341245844960213,
+          1.0456661693751812,
+          0.9277081117033958,
+          0.8911252953112125,
+          1.0219579562544823,
+          1.5367916785180569,
+          1.0419581085443497,
+          1.129625365138054,
+          1.002499833703041,
+          0.9289169684052467,
+          1.8493328243494034,
+          1.0681669227778912,
+          0.861000269651413,
+          0.9378748945891857,
+          0.8588754571974277,
+          0.8622501045465469,
+          0.9270831942558289,
+          0.8486248552799225,
+          0.8307909592986107,
+          0.813458114862442,
+          0.8192500099539757,
+          0.8321660570800304
+        ],
+        "warm_getblock_p50_ms": 1.0308539494872093,
+        "warm_getblock_p95_ms": 1.7086893087252975,
+        "peak_rss_mib": 42.234375
+      },
+      "live": {
+        "status": "passed",
+        "checks": {
+          "302400001": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "KPY8YHhZTuKXuA5ncyMrhWmLwfEq6ZmLzwYxF1VKneo",
+              "previousBlockhash": "HTCes91cfwRratW4babPCUqe54N8LqCmx7UMC8fsBmuQ",
+              "parentSlot": 302400000,
+              "blockTime": 1732048881,
+              "blockHeight": 280880470,
+              "transaction_count": 140,
+              "first_transaction_fee": 5000
+            }
+          },
+          "302400004": {
+            "status": "passed",
+            "error_code": -32007
+          },
+          "43200000": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "HVHEgGRbukDHtRysZFfbfy4ssdWKW1gDY6gsngCycrvf",
+              "previousBlockhash": "47PrqQ4MJrT4G2GB7uHk5CdZadTKspB5HgDszzxHPJc2",
+              "parentSlot": 43199999,
+              "blockTime": 1603254141,
+              "blockHeight": null,
+              "transaction_count": 208,
+              "first_transaction_fee": 5000
+            }
+          },
+          "getTransaction": {
+            "status": "passed",
+            "error_code": -32601
+          }
+        }
+      }
+    },
+    {
+      "impl": "c",
+      "offline": {
+        "status": "passed",
+        "loc": 4351,
+        "source_kib": 167.529296875,
+        "build_seconds": 1.0301339589059353,
+        "binary_kib": 139.375,
+        "artifact_files": [
+          "build/onlyblocks"
+        ],
+        "startup_to_health_ms": 63.41699976474047,
+        "cold_getblock_ms": 1.8751658499240875,
+        "cold_upstream": {
+          "slot_range_requests": 2,
+          "car_requests": 2,
+          "total_requests": 4,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_upstream": {
+          "slot_range_requests": 0,
+          "car_requests": 30,
+          "total_requests": 30,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_getblock_samples_ms": [
+          0.5865423008799553,
+          0.5398746579885483,
+          0.5665002390742302,
+          0.4770420491695404,
+          0.49725035205483437,
+          0.49012480303645134,
+          0.4066247493028641,
+          0.4499172791838646,
+          0.45466702431440353,
+          0.45508285984396935,
+          0.4853331483900547,
+          0.48066582530736923,
+          0.43962523341178894,
+          0.4343749023973942,
+          0.4479577764868736,
+          0.42220763862133026,
+          0.41504111140966415,
+          0.45575015246868134,
+          0.46504102647304535,
+          0.41895778849720955,
+          0.49887504428625107,
+          0.5132090300321579,
+          0.5267499946057796,
+          0.4836251027882099,
+          0.4887077957391739,
+          0.4926673136651516,
+          0.45108282938599586,
+          0.4541659727692604,
+          0.48229238018393517,
+          0.5203750915825367
+        ],
+        "warm_getblock_p50_ms": 0.4788539372384548,
+        "warm_getblock_p95_ms": 0.5545187275856733,
+        "peak_rss_mib": 10.3125
+      },
+      "live": {
+        "status": "passed",
+        "checks": {
+          "302400001": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "KPY8YHhZTuKXuA5ncyMrhWmLwfEq6ZmLzwYxF1VKneo",
+              "previousBlockhash": "HTCes91cfwRratW4babPCUqe54N8LqCmx7UMC8fsBmuQ",
+              "parentSlot": 302400000,
+              "blockTime": 1732048881,
+              "blockHeight": 280880470,
+              "transaction_count": 140,
+              "first_transaction_fee": 5000
+            }
+          },
+          "302400004": {
+            "status": "passed",
+            "error_code": -32007
+          },
+          "43200000": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "HVHEgGRbukDHtRysZFfbfy4ssdWKW1gDY6gsngCycrvf",
+              "previousBlockhash": "47PrqQ4MJrT4G2GB7uHk5CdZadTKspB5HgDszzxHPJc2",
+              "parentSlot": 43199999,
+              "blockTime": 1603254141,
+              "blockHeight": null,
+              "transaction_count": 208,
+              "first_transaction_fee": 5000
+            }
+          },
+          "getTransaction": {
+            "status": "passed",
+            "error_code": -32601
+          }
+        }
+      }
+    },
+    {
+      "impl": "cpp",
+      "offline": {
+        "status": "passed",
+        "loc": 3398,
+        "source_kib": 147.3388671875,
+        "build_seconds": 10.54431733302772,
+        "binary_kib": 371.3125,
+        "artifact_files": [
+          "build/onlyblocks"
+        ],
+        "startup_to_health_ms": 63.67654213681817,
+        "cold_getblock_ms": 2.5096661411225796,
+        "cold_upstream": {
+          "slot_range_requests": 2,
+          "car_requests": 2,
+          "total_requests": 4,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_upstream": {
+          "slot_range_requests": 0,
+          "car_requests": 30,
+          "total_requests": 30,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_getblock_samples_ms": [
+          1.0009580291807652,
+          0.802834052592516,
+          0.7759579457342625,
+          0.7858751341700554,
+          0.7504592649638653,
+          0.7558339275419712,
+          0.7927496917545795,
+          0.5667917430400848,
+          0.5496670491993427,
+          0.5634999834001064,
+          0.5612079985439777,
+          0.5156248807907104,
+          0.5214167758822441,
+          0.5197920836508274,
+          0.5276249721646309,
+          0.5537080578505993,
+          0.5352501757442951,
+          0.6552077829837799,
+          0.6785420700907707,
+          0.624834094196558,
+          0.7033334113657475,
+          0.6412919610738754,
+          0.8135000243782997,
+          0.6417501717805862,
+          0.688707921653986,
+          0.7843752391636372,
+          0.7207500748336315,
+          0.6520408205688,
+          0.7240409031510353,
+          0.5189999938011169
+        ],
+        "warm_getblock_p50_ms": 0.6536243017762899,
+        "warm_getblock_p95_ms": 0.808700337074697,
+        "peak_rss_mib": 8.546875
+      },
+      "live": {
+        "status": "passed",
+        "checks": {
+          "302400001": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "KPY8YHhZTuKXuA5ncyMrhWmLwfEq6ZmLzwYxF1VKneo",
+              "previousBlockhash": "HTCes91cfwRratW4babPCUqe54N8LqCmx7UMC8fsBmuQ",
+              "parentSlot": 302400000,
+              "blockTime": 1732048881,
+              "blockHeight": 280880470,
+              "transaction_count": 140,
+              "first_transaction_fee": 5000
+            }
+          },
+          "302400004": {
+            "status": "passed",
+            "error_code": -32007
+          },
+          "43200000": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "HVHEgGRbukDHtRysZFfbfy4ssdWKW1gDY6gsngCycrvf",
+              "previousBlockhash": "47PrqQ4MJrT4G2GB7uHk5CdZadTKspB5HgDszzxHPJc2",
+              "parentSlot": 43199999,
+              "blockTime": 1603254141,
+              "blockHeight": null,
+              "transaction_count": 208,
+              "first_transaction_fee": 5000
+            }
+          },
+          "getTransaction": {
+            "status": "passed",
+            "error_code": -32601
+          }
+        }
+      }
+    },
+    {
+      "impl": "csharp",
+      "offline": {
+        "status": "passed",
+        "loc": 1723,
+        "source_kib": 77.625,
+        "build_seconds": 1.8976069167256355,
+        "binary_kib": 107.5,
+        "artifact_files": [
+          "build/OnlyBlocks.dll"
+        ],
+        "startup_to_health_ms": 149.36404209583998,
+        "cold_getblock_ms": 57.16220801696181,
+        "cold_upstream": {
+          "slot_range_requests": 2,
+          "car_requests": 2,
+          "total_requests": 4,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_upstream": {
+          "slot_range_requests": 0,
+          "car_requests": 30,
+          "total_requests": 30,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_getblock_samples_ms": [
+          1.835459377616644,
+          0.9630830027163029,
+          0.8362089283764362,
+          0.8722920902073383,
+          0.7731248624622822,
+          0.7968749850988388,
+          0.8296249434351921,
+          0.6914585828781128,
+          0.7172091864049435,
+          0.7357080467045307,
+          0.7234592922031879,
+          0.8383751846849918,
+          0.7170829921960831,
+          0.7899999618530273,
+          0.7139588706195354,
+          0.7732082158327103,
+          0.7250839844346046,
+          0.6786249577999115,
+          0.7565421983599663,
+          0.7149577140808105,
+          0.729583203792572,
+          0.6823749281466007,
+          0.7208753377199173,
+          0.7622078992426395,
+          0.7256669923663139,
+          0.7322500459849834,
+          0.676250085234642,
+          0.7560830563306808,
+          0.6867912597954273,
+          0.6775832735002041
+        ],
+        "warm_getblock_p50_ms": 0.7309166248887777,
+        "warm_getblock_p95_ms": 0.9222270920872688,
+        "peak_rss_mib": 67.4375
+      },
+      "live": {
+        "status": "passed",
+        "checks": {
+          "302400001": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "KPY8YHhZTuKXuA5ncyMrhWmLwfEq6ZmLzwYxF1VKneo",
+              "previousBlockhash": "HTCes91cfwRratW4babPCUqe54N8LqCmx7UMC8fsBmuQ",
+              "parentSlot": 302400000,
+              "blockTime": 1732048881,
+              "blockHeight": 280880470,
+              "transaction_count": 140,
+              "first_transaction_fee": 5000
+            }
+          },
+          "302400004": {
+            "status": "passed",
+            "error_code": -32007
+          },
+          "43200000": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "HVHEgGRbukDHtRysZFfbfy4ssdWKW1gDY6gsngCycrvf",
+              "previousBlockhash": "47PrqQ4MJrT4G2GB7uHk5CdZadTKspB5HgDszzxHPJc2",
+              "parentSlot": 43199999,
+              "blockTime": 1603254141,
+              "blockHeight": null,
+              "transaction_count": 208,
+              "first_transaction_fee": 5000
+            }
+          },
+          "getTransaction": {
+            "status": "passed",
+            "error_code": -32601
+          }
+        }
+      }
+    },
+    {
+      "impl": "elixir",
+      "offline": {
+        "status": "passed",
+        "loc": 2110,
+        "source_kib": 89.3564453125,
+        "build_seconds": 0.775543459225446,
+        "binary_kib": 210.16015625,
+        "artifact_files": [
+          "_build/ebin/Elixir.OnlyBlocks.Archive.beam",
+          "_build/ebin/Elixir.OnlyBlocks.CLI.beam",
+          "_build/ebin/Elixir.OnlyBlocks.DecodeError.beam",
+          "_build/ebin/Elixir.OnlyBlocks.JSON.beam",
+          "_build/ebin/Elixir.OnlyBlocks.LRU.beam",
+          "_build/ebin/Elixir.OnlyBlocks.Meta.beam",
+          "_build/ebin/Elixir.OnlyBlocks.Rpc.beam",
+          "_build/ebin/Elixir.OnlyBlocks.Server.beam",
+          "_build/ebin/Elixir.OnlyBlocks.Wire.beam",
+          "_build/ebin/Elixir.OnlyBlocks.Zstd.Error.beam",
+          "_build/ebin/Elixir.OnlyBlocks.Zstd.beam"
+        ],
+        "startup_to_health_ms": 295.4893750138581,
+        "cold_getblock_ms": 10.32754173502326,
+        "cold_upstream": {
+          "slot_range_requests": 2,
+          "car_requests": 2,
+          "total_requests": 4,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_upstream": {
+          "slot_range_requests": 0,
+          "car_requests": 30,
+          "total_requests": 30,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_getblock_samples_ms": [
+          1.307875383645296,
+          1.1387909762561321,
+          1.169667113572359,
+          1.1205840855836868,
+          1.1828341521322727,
+          1.0674581862986088,
+          1.0492918081581593,
+          1.019459217786789,
+          1.0066251270473003,
+          1.0009999386966228,
+          1.1541671119630337,
+          1.482292078435421,
+          1.1020000092685223,
+          1.0049166157841682,
+          1.0467921383678913,
+          0.9267083369195461,
+          0.9153750725090504,
+          1.0796249844133854,
+          1.095999963581562,
+          1.022291835397482,
+          1.0360842570662498,
+          1.0622083209455013,
+          1.054583117365837,
+          1.0167080909013748,
+          1.0711252689361572,
+          1.031000167131424,
+          1.1140829883515835,
+          1.0048332624137402,
+          0.9252079762518406,
+          0.9628748521208763
+        ],
+        "warm_getblock_p50_ms": 1.0519374627619982,
+        "warm_getblock_p95_ms": 1.2516068294644356,
+        "peak_rss_mib": 87.375
+      },
+      "live": {
+        "status": "passed",
+        "checks": {
+          "302400001": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "KPY8YHhZTuKXuA5ncyMrhWmLwfEq6ZmLzwYxF1VKneo",
+              "previousBlockhash": "HTCes91cfwRratW4babPCUqe54N8LqCmx7UMC8fsBmuQ",
+              "parentSlot": 302400000,
+              "blockTime": 1732048881,
+              "blockHeight": 280880470,
+              "transaction_count": 140,
+              "first_transaction_fee": 5000
+            }
+          },
+          "302400004": {
+            "status": "passed",
+            "error_code": -32007
+          },
+          "43200000": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "HVHEgGRbukDHtRysZFfbfy4ssdWKW1gDY6gsngCycrvf",
+              "previousBlockhash": "47PrqQ4MJrT4G2GB7uHk5CdZadTKspB5HgDszzxHPJc2",
+              "parentSlot": 43199999,
+              "blockTime": 1603254141,
+              "blockHeight": null,
+              "transaction_count": 208,
+              "first_transaction_fee": 5000
+            }
+          },
+          "getTransaction": {
+            "status": "passed",
+            "error_code": -32601
+          }
+        }
+      }
+    },
+    {
+      "impl": "erlang",
+      "offline": {
+        "status": "passed",
+        "loc": 2017,
+        "source_kib": 97.9208984375,
+        "build_seconds": 0.693940915632993,
+        "binary_kib": 80.21875,
+        "artifact_files": [
+          "ebin/ob_archive.beam",
+          "ebin/ob_json.beam",
+          "ebin/ob_lru.beam",
+          "ebin/ob_meta.beam",
+          "ebin/ob_rpc.beam",
+          "ebin/ob_wire.beam",
+          "ebin/ob_zstd.beam",
+          "ebin/onlyblocks.beam"
+        ],
+        "startup_to_health_ms": 185.60670921579003,
+        "cold_getblock_ms": 14.378874562680721,
+        "cold_upstream": {
+          "slot_range_requests": 2,
+          "car_requests": 2,
+          "total_requests": 4,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_upstream": {
+          "slot_range_requests": 0,
+          "car_requests": 30,
+          "total_requests": 30,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_getblock_samples_ms": [
+          1.1835000477731228,
+          0.9731249883770943,
+          0.876166857779026,
+          0.8917907252907753,
+          1.0362910106778145,
+          0.8727498352527618,
+          0.9854999370872974,
+          1.046917401254177,
+          0.9919581934809685,
+          0.9017502889037132,
+          0.8721668273210526,
+          0.967124942690134,
+          1.072583720088005,
+          0.8838330395519733,
+          0.868041068315506,
+          0.8952091448009014,
+          0.8302498608827591,
+          0.8441247045993805,
+          0.7908330298960209,
+          0.7966668345034122,
+          0.7844590581953526,
+          0.7529580034315586,
+          1.0582921095192432,
+          0.764000229537487,
+          1.0815826244652271,
+          0.9751669131219387,
+          0.9750002063810825,
+          0.9609591215848923,
+          1.0038749314844608,
+          0.9294580668210983
+        ],
+        "warm_getblock_p50_ms": 0.9156041778624058,
+        "warm_getblock_p95_ms": 1.0775331174954772,
+        "peak_rss_mib": 68.71875
+      },
+      "live": {
+        "status": "passed",
+        "checks": {
+          "302400001": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "KPY8YHhZTuKXuA5ncyMrhWmLwfEq6ZmLzwYxF1VKneo",
+              "previousBlockhash": "HTCes91cfwRratW4babPCUqe54N8LqCmx7UMC8fsBmuQ",
+              "parentSlot": 302400000,
+              "blockTime": 1732048881,
+              "blockHeight": 280880470,
+              "transaction_count": 140,
+              "first_transaction_fee": 5000
+            }
+          },
+          "302400004": {
+            "status": "passed",
+            "error_code": -32007
+          },
+          "43200000": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "HVHEgGRbukDHtRysZFfbfy4ssdWKW1gDY6gsngCycrvf",
+              "previousBlockhash": "47PrqQ4MJrT4G2GB7uHk5CdZadTKspB5HgDszzxHPJc2",
+              "parentSlot": 43199999,
+              "blockTime": 1603254141,
+              "blockHeight": null,
+              "transaction_count": 208,
+              "first_transaction_fee": 5000
+            }
+          },
+          "getTransaction": {
+            "status": "passed",
+            "error_code": -32601
+          }
+        }
+      }
+    },
+    {
+      "impl": "fortran",
+      "offline": {
+        "status": "passed",
+        "loc": 7484,
+        "source_kib": 240.3974609375,
+        "build_seconds": 5.762066415976733,
+        "binary_kib": 347.15625,
+        "artifact_files": [
+          "bin/onlyblocks"
+        ],
+        "startup_to_health_ms": 60.56362530216575,
+        "cold_getblock_ms": 2.225416712462902,
+        "cold_upstream": {
+          "slot_range_requests": 2,
+          "car_requests": 2,
+          "total_requests": 4,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_upstream": {
+          "slot_range_requests": 0,
+          "car_requests": 30,
+          "total_requests": 30,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_getblock_samples_ms": [
+          0.7643746212124825,
+          0.6546247750520706,
+          0.712584238499403,
+          0.7583340629935265,
+          0.7304996252059937,
+          0.711583998054266,
+          0.698041170835495,
+          0.7752496749162674,
+          0.7548751309514046,
+          0.6497078575193882,
+          0.6407075561583042,
+          0.643707811832428,
+          0.6294576451182365,
+          0.6596245802938938,
+          0.581083819270134,
+          0.5702502094209194,
+          0.5877497605979443,
+          0.5819583311676979,
+          0.6071669049561024,
+          0.5945418961346149,
+          0.526833813637495,
+          0.5279160104691982,
+          0.538041815161705,
+          0.5428330041468143,
+          0.5422499962151051,
+          0.5153329111635685,
+          0.5488749593496323,
+          0.5304170772433281,
+          0.5185841582715511,
+          0.5237921141088009
+        ],
+        "warm_getblock_p50_ms": 0.6008544005453587,
+        "warm_getblock_p95_ms": 0.7616563700139523,
+        "peak_rss_mib": 5.265625
+      },
+      "live": {
+        "status": "passed",
+        "checks": {
+          "302400001": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "KPY8YHhZTuKXuA5ncyMrhWmLwfEq6ZmLzwYxF1VKneo",
+              "previousBlockhash": "HTCes91cfwRratW4babPCUqe54N8LqCmx7UMC8fsBmuQ",
+              "parentSlot": 302400000,
+              "blockTime": 1732048881,
+              "blockHeight": 280880470,
+              "transaction_count": 140,
+              "first_transaction_fee": 5000
+            }
+          },
+          "302400004": {
+            "status": "passed",
+            "error_code": -32007
+          },
+          "43200000": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "HVHEgGRbukDHtRysZFfbfy4ssdWKW1gDY6gsngCycrvf",
+              "previousBlockhash": "47PrqQ4MJrT4G2GB7uHk5CdZadTKspB5HgDszzxHPJc2",
+              "parentSlot": 43199999,
+              "blockTime": 1603254141,
+              "blockHeight": null,
+              "transaction_count": 208,
+              "first_transaction_fee": 5000
+            }
+          },
+          "getTransaction": {
+            "status": "passed",
+            "error_code": -32601
+          }
+        }
+      }
+    },
+    {
+      "impl": "go",
+      "offline": {
+        "status": "passed",
+        "loc": 2028,
+        "source_kib": 58.9833984375,
+        "build_seconds": 0.39722216688096523,
+        "binary_kib": 8912.798828125,
+        "artifact_files": [
+          "bin/onlyblocks"
+        ],
+        "startup_to_health_ms": 180.42408395558596,
+        "cold_getblock_ms": 1.981792040169239,
+        "cold_upstream": {
+          "slot_range_requests": 2,
+          "car_requests": 2,
+          "total_requests": 4,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_upstream": {
+          "slot_range_requests": 0,
+          "car_requests": 30,
+          "total_requests": 30,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_getblock_samples_ms": [
+          0.7147910073399544,
+          0.6422498263418674,
+          0.6549577228724957,
+          0.631874892860651,
+          0.7191249169409275,
+          0.709041953086853,
+          0.7720831781625748,
+          0.6910841912031174,
+          0.6011668592691422,
+          0.5517918616533279,
+          0.6445418111979961,
+          0.6372081115841866,
+          0.6463746540248394,
+          0.6298338994383812,
+          0.6315410137176514,
+          0.6638336926698685,
+          0.6182920187711716,
+          0.6059575825929642,
+          0.6056660786271095,
+          0.6167921237647533,
+          0.652833841741085,
+          0.6461250595748425,
+          0.5995002575218678,
+          0.6228326819837093,
+          0.5857078358530998,
+          0.6146254017949104,
+          0.6137499585747719,
+          0.5862908437848091,
+          0.5202912725508213,
+          0.510042067617178
+        ],
+        "warm_getblock_p50_ms": 0.6306874565780163,
+        "warm_getblock_p95_ms": 0.7171746576204896,
+        "peak_rss_mib": 14.5625
+      },
+      "live": {
+        "status": "passed",
+        "checks": {
+          "302400001": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "KPY8YHhZTuKXuA5ncyMrhWmLwfEq6ZmLzwYxF1VKneo",
+              "previousBlockhash": "HTCes91cfwRratW4babPCUqe54N8LqCmx7UMC8fsBmuQ",
+              "parentSlot": 302400000,
+              "blockTime": 1732048881,
+              "blockHeight": 280880470,
+              "transaction_count": 140,
+              "first_transaction_fee": 5000
+            }
+          },
+          "302400004": {
+            "status": "passed",
+            "error_code": -32007
+          },
+          "43200000": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "HVHEgGRbukDHtRysZFfbfy4ssdWKW1gDY6gsngCycrvf",
+              "previousBlockhash": "47PrqQ4MJrT4G2GB7uHk5CdZadTKspB5HgDszzxHPJc2",
+              "parentSlot": 43199999,
+              "blockTime": 1603254141,
+              "blockHeight": null,
+              "transaction_count": 208,
+              "first_transaction_fee": 5000
+            }
+          },
+          "getTransaction": {
+            "status": "passed",
+            "error_code": -32601
+          }
+        }
+      }
+    },
+    {
+      "impl": "haskell",
+      "offline": {
+        "status": "passed",
+        "loc": 2238,
+        "source_kib": 112.5185546875,
+        "build_seconds": 7.43636537482962,
+        "binary_kib": 23104.9921875,
+        "artifact_files": [
+          "bin/onlyblocks"
+        ],
+        "startup_to_health_ms": 282.1225826628506,
+        "cold_getblock_ms": 3.387250006198883,
+        "cold_upstream": {
+          "slot_range_requests": 2,
+          "car_requests": 2,
+          "total_requests": 4,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_upstream": {
+          "slot_range_requests": 0,
+          "car_requests": 30,
+          "total_requests": 30,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_getblock_samples_ms": [
+          1.076791901141405,
+          0.806750264018774,
+          0.7231668569147587,
+          0.7262919098138809,
+          0.8562090806663036,
+          0.8194576948881149,
+          0.7839160971343517,
+          0.7724170573055744,
+          0.809249933809042,
+          0.8946671150624752,
+          0.8435421623289585,
+          0.669209286570549,
+          0.6883749738335609,
+          0.7457081228494644,
+          0.6957091391086578,
+          0.6770412437617779,
+          0.6539998576045036,
+          0.7002502679824829,
+          0.7557501085102558,
+          0.6463751196861267,
+          0.806999858468771,
+          0.7148748263716698,
+          1.388499978929758,
+          0.6786249577999115,
+          0.6941254250705242,
+          0.6511672399938107,
+          0.6534168496727943,
+          0.6482088938355446,
+          0.6426251493394375,
+          0.6368341855704784
+        ],
+        "warm_getblock_p50_ms": 0.7190208416432142,
+        "warm_getblock_p95_ms": 0.9948357474058867,
+        "peak_rss_mib": 36.578125
+      },
+      "live": {
+        "status": "passed",
+        "checks": {
+          "302400001": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "KPY8YHhZTuKXuA5ncyMrhWmLwfEq6ZmLzwYxF1VKneo",
+              "previousBlockhash": "HTCes91cfwRratW4babPCUqe54N8LqCmx7UMC8fsBmuQ",
+              "parentSlot": 302400000,
+              "blockTime": 1732048881,
+              "blockHeight": 280880470,
+              "transaction_count": 140,
+              "first_transaction_fee": 5000
+            }
+          },
+          "302400004": {
+            "status": "passed",
+            "error_code": -32007
+          },
+          "43200000": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "HVHEgGRbukDHtRysZFfbfy4ssdWKW1gDY6gsngCycrvf",
+              "previousBlockhash": "47PrqQ4MJrT4G2GB7uHk5CdZadTKspB5HgDszzxHPJc2",
+              "parentSlot": 43199999,
+              "blockTime": 1603254141,
+              "blockHeight": null,
+              "transaction_count": 208,
+              "first_transaction_fee": 5000
+            }
+          },
+          "getTransaction": {
+            "status": "passed",
+            "error_code": -32601
+          }
+        }
+      }
+    },
+    {
+      "impl": "java",
+      "offline": {
+        "status": "passed",
+        "loc": 1591,
+        "source_kib": 74.013671875,
+        "build_seconds": 0.6875292081385851,
+        "binary_kib": 119.0458984375,
+        "artifact_files": [
+          "build/onlyblocks/Json$Num.class",
+          "build/onlyblocks/Json.class",
+          "build/onlyblocks/Server$Archive$Range.class",
+          "build/onlyblocks/Server$Archive.class",
+          "build/onlyblocks/Server$Lru.class",
+          "build/onlyblocks/Server$RangeBody.class",
+          "build/onlyblocks/Server$RangeStatus.class",
+          "build/onlyblocks/Server$RpcError.class",
+          "build/onlyblocks/Server.class",
+          "build/onlyblocks/Solana$1.class",
+          "build/onlyblocks/Solana$Field.class",
+          "build/onlyblocks/Solana$Inner.class",
+          "build/onlyblocks/Solana$Instruction.class",
+          "build/onlyblocks/Solana$Meta.class",
+          "build/onlyblocks/Solana$Options.class",
+          "build/onlyblocks/Solana$Proto.class",
+          "build/onlyblocks/Solana$Repeated.class",
+          "build/onlyblocks/Solana$Scalar.class",
+          "build/onlyblocks/Solana$Schema.class",
+          "build/onlyblocks/Solana$Transaction.class",
+          "build/onlyblocks/Solana.class",
+          "build/onlyblocks/Wire$BadData.class",
+          "build/onlyblocks/Wire$Car.class",
+          "build/onlyblocks/Wire$Cid.class",
+          "build/onlyblocks/Wire$Reader.class",
+          "build/onlyblocks/Wire$Section.class",
+          "build/onlyblocks/Wire$Unsigned.class",
+          "build/onlyblocks/Wire.class",
+          "build/onlyblocks/Zstd$Backward.class",
+          "build/onlyblocks/Zstd$Cell.class",
+          "build/onlyblocks/Zstd$Forward.class",
+          "build/onlyblocks/Zstd$Frame.class",
+          "build/onlyblocks/Zstd$Output.class",
+          "build/onlyblocks/Zstd$Table.class",
+          "build/onlyblocks/Zstd.class"
+        ],
+        "startup_to_health_ms": 197.24162528291345,
+        "cold_getblock_ms": 41.649125050753355,
+        "cold_upstream": {
+          "slot_range_requests": 2,
+          "car_requests": 2,
+          "total_requests": 4,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_upstream": {
+          "slot_range_requests": 0,
+          "car_requests": 30,
+          "total_requests": 30,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_getblock_samples_ms": [
+          2.8402921743690968,
+          2.6814579032361507,
+          2.3260419256985188,
+          2.326374873518944,
+          2.2694580256938934,
+          2.5656246580183506,
+          2.2144168615341187,
+          2.1319580264389515,
+          2.0958329550921917,
+          2.010209020227194,
+          2.088041976094246,
+          2.156415954232216,
+          1.96050014346838,
+          1.7826668918132782,
+          1.8004160374403,
+          1.7387503758072853,
+          1.7058751545846462,
+          1.7566666938364506,
+          1.6966252587735653,
+          1.6771662048995495,
+          4.083000123500824,
+          1.7847907729446888,
+          1.7987913452088833,
+          1.670499797910452,
+          1.7253328114748,
+          1.7450409941375256,
+          1.728416420519352,
+          1.6775839030742645,
+          1.7167911864817142,
+          1.6784998588263988
+        ],
+        "warm_getblock_p50_ms": 1.7996036913245916,
+        "warm_getblock_p95_ms": 2.768816752359271,
+        "peak_rss_mib": 102.90625
+      },
+      "live": {
+        "status": "passed",
+        "checks": {
+          "302400001": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "KPY8YHhZTuKXuA5ncyMrhWmLwfEq6ZmLzwYxF1VKneo",
+              "previousBlockhash": "HTCes91cfwRratW4babPCUqe54N8LqCmx7UMC8fsBmuQ",
+              "parentSlot": 302400000,
+              "blockTime": 1732048881,
+              "blockHeight": 280880470,
+              "transaction_count": 140,
+              "first_transaction_fee": 5000
+            }
+          },
+          "302400004": {
+            "status": "passed",
+            "error_code": -32007
+          },
+          "43200000": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "HVHEgGRbukDHtRysZFfbfy4ssdWKW1gDY6gsngCycrvf",
+              "previousBlockhash": "47PrqQ4MJrT4G2GB7uHk5CdZadTKspB5HgDszzxHPJc2",
+              "parentSlot": 43199999,
+              "blockTime": 1603254141,
+              "blockHeight": null,
+              "transaction_count": 208,
+              "first_transaction_fee": 5000
+            }
+          },
+          "getTransaction": {
+            "status": "passed",
+            "error_code": -32601
+          }
+        }
+      }
+    },
+    {
+      "impl": "javascript-node",
+      "offline": {
+        "status": "passed",
+        "loc": 1143,
+        "source_kib": 45.818359375,
+        "build_seconds": null,
+        "binary_kib": null,
+        "startup_to_health_ms": 127.3441668599844,
+        "cold_getblock_ms": 8.174499962478876,
+        "cold_upstream": {
+          "slot_range_requests": 2,
+          "car_requests": 2,
+          "total_requests": 4,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_upstream": {
+          "slot_range_requests": 0,
+          "car_requests": 30,
+          "total_requests": 30,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_getblock_samples_ms": [
+          4.191874992102385,
+          1.5715411864221096,
+          1.3236668892204762,
+          1.2359172105789185,
+          1.2327497825026512,
+          1.2358329258859158,
+          1.176374964416027,
+          1.2536668218672276,
+          1.2085000053048134,
+          1.3172919861972332,
+          1.1320002377033234,
+          0.9992499835789204,
+          0.9926250204443932,
+          0.9816251695156097,
+          0.9835828095674515,
+          0.947082880884409,
+          0.8979998528957367,
+          0.9193751029670238,
+          0.9292080067098141,
+          0.9377500973641872,
+          0.931750051677227,
+          1.1879578232765198,
+          0.9485422633588314,
+          0.9932075627148151,
+          0.9733745828270912,
+          1.346999779343605,
+          0.9785001166164875,
+          0.8447500877082348,
+          0.8793328888714314,
+          1.0040411725640297
+        ],
+        "warm_getblock_p50_ms": 0.9962287731468678,
+        "warm_getblock_p95_ms": 1.4704975532367826,
+        "peak_rss_mib": 68.359375
+      },
+      "live": {
+        "status": "passed",
+        "checks": {
+          "302400001": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "KPY8YHhZTuKXuA5ncyMrhWmLwfEq6ZmLzwYxF1VKneo",
+              "previousBlockhash": "HTCes91cfwRratW4babPCUqe54N8LqCmx7UMC8fsBmuQ",
+              "parentSlot": 302400000,
+              "blockTime": 1732048881,
+              "blockHeight": 280880470,
+              "transaction_count": 140,
+              "first_transaction_fee": 5000
+            }
+          },
+          "302400004": {
+            "status": "passed",
+            "error_code": -32007
+          },
+          "43200000": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "HVHEgGRbukDHtRysZFfbfy4ssdWKW1gDY6gsngCycrvf",
+              "previousBlockhash": "47PrqQ4MJrT4G2GB7uHk5CdZadTKspB5HgDszzxHPJc2",
+              "parentSlot": 43199999,
+              "blockTime": 1603254141,
+              "blockHeight": null,
+              "transaction_count": 208,
+              "first_transaction_fee": 5000
+            }
+          },
+          "getTransaction": {
+            "status": "passed",
+            "error_code": -32601
+          }
+        }
+      }
+    },
+    {
+      "impl": "kotlin",
+      "offline": {
+        "status": "passed",
+        "loc": 1480,
+        "source_kib": 65.08984375,
+        "build_seconds": 5.270587875042111,
+        "binary_kib": 5725.982421875,
+        "artifact_files": [
+          "build/onlyblocks.jar"
+        ],
+        "startup_to_health_ms": 206.13312534987926,
+        "cold_getblock_ms": 52.70416708663106,
+        "cold_upstream": {
+          "slot_range_requests": 2,
+          "car_requests": 2,
+          "total_requests": 4,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_upstream": {
+          "slot_range_requests": 0,
+          "car_requests": 30,
+          "total_requests": 30,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_getblock_samples_ms": [
+          3.1494167633354664,
+          2.8007086366415024,
+          2.427041996270418,
+          2.3028748109936714,
+          2.758499700576067,
+          2.4438328109681606,
+          2.4157497100532055,
+          3.9778752252459526,
+          2.1561249159276485,
+          2.05175019800663,
+          1.980832777917385,
+          2.219041809439659,
+          2.0102919079363346,
+          1.9995830953121185,
+          1.9453330896794796,
+          1.7818748019635677,
+          1.7192079685628414,
+          2.063832711428404,
+          1.8134578131139278,
+          1.8597496673464775,
+          1.8093748949468136,
+          1.8679997883737087,
+          1.7882916145026684,
+          1.7598341219127178,
+          1.7916248179972172,
+          2.0180419087409973,
+          1.8658749759197235,
+          2.0141657441854477,
+          4.017374943941832,
+          1.7725001089274883
+        ],
+        "warm_getblock_p50_ms": 2.012228826060891,
+        "warm_getblock_p95_ms": 3.605068917386234,
+        "peak_rss_mib": 110.15625
+      },
+      "live": {
+        "status": "passed",
+        "checks": {
+          "302400001": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "KPY8YHhZTuKXuA5ncyMrhWmLwfEq6ZmLzwYxF1VKneo",
+              "previousBlockhash": "HTCes91cfwRratW4babPCUqe54N8LqCmx7UMC8fsBmuQ",
+              "parentSlot": 302400000,
+              "blockTime": 1732048881,
+              "blockHeight": 280880470,
+              "transaction_count": 140,
+              "first_transaction_fee": 5000
+            }
+          },
+          "302400004": {
+            "status": "passed",
+            "error_code": -32007
+          },
+          "43200000": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "HVHEgGRbukDHtRysZFfbfy4ssdWKW1gDY6gsngCycrvf",
+              "previousBlockhash": "47PrqQ4MJrT4G2GB7uHk5CdZadTKspB5HgDszzxHPJc2",
+              "parentSlot": 43199999,
+              "blockTime": 1603254141,
+              "blockHeight": null,
+              "transaction_count": 208,
+              "first_transaction_fee": 5000
+            }
+          },
+          "getTransaction": {
+            "status": "passed",
+            "error_code": -32601
+          }
+        }
+      }
+    },
+    {
+      "impl": "ocaml",
+      "offline": {
+        "status": "passed",
+        "loc": 2013,
+        "source_kib": 100.2880859375,
+        "build_seconds": 1.7395342499949038,
+        "binary_kib": 1854.625,
+        "artifact_files": [
+          "bin/onlyblocks"
+        ],
+        "startup_to_health_ms": 176.20237497612834,
+        "cold_getblock_ms": 2.2503752261400223,
+        "cold_upstream": {
+          "slot_range_requests": 2,
+          "car_requests": 2,
+          "total_requests": 4,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_upstream": {
+          "slot_range_requests": 0,
+          "car_requests": 30,
+          "total_requests": 30,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_getblock_samples_ms": [
+          0.804416835308075,
+          0.7571252062916756,
+          0.9060408920049667,
+          0.8463328704237938,
+          0.8078329265117645,
+          0.8341670036315918,
+          0.9256252087652683,
+          0.8684168569743633,
+          0.8366252295672894,
+          0.8195000700652599,
+          0.8446667343378067,
+          0.6901668384671211,
+          0.6911670789122581,
+          0.7036658935248852,
+          0.687791034579277,
+          0.682334415614605,
+          0.6415420211851597,
+          0.6537502631545067,
+          0.6518326699733734,
+          0.6625000387430191,
+          0.6346250884234905,
+          0.6450838409364223,
+          0.6577917374670506,
+          0.6422498263418674,
+          0.6073331460356712,
+          0.6194170564413071,
+          0.6080828607082367,
+          0.5928748287260532,
+          0.5836249329149723,
+          0.5940841510891914
+        ],
+        "warm_getblock_p50_ms": 0.685062725096941,
+        "warm_getblock_p95_ms": 0.8891100762411952,
+        "peak_rss_mib": 6.375
+      },
+      "live": {
+        "status": "passed",
+        "checks": {
+          "302400001": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "KPY8YHhZTuKXuA5ncyMrhWmLwfEq6ZmLzwYxF1VKneo",
+              "previousBlockhash": "HTCes91cfwRratW4babPCUqe54N8LqCmx7UMC8fsBmuQ",
+              "parentSlot": 302400000,
+              "blockTime": 1732048881,
+              "blockHeight": 280880470,
+              "transaction_count": 140,
+              "first_transaction_fee": 5000
+            }
+          },
+          "302400004": {
+            "status": "passed",
+            "error_code": -32007
+          },
+          "43200000": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "HVHEgGRbukDHtRysZFfbfy4ssdWKW1gDY6gsngCycrvf",
+              "previousBlockhash": "47PrqQ4MJrT4G2GB7uHk5CdZadTKspB5HgDszzxHPJc2",
+              "parentSlot": 43199999,
+              "blockTime": 1603254141,
+              "blockHeight": null,
+              "transaction_count": 208,
+              "first_transaction_fee": 5000
+            }
+          },
+          "getTransaction": {
+            "status": "passed",
+            "error_code": -32601
+          }
+        }
+      }
+    },
+    {
+      "impl": "perl",
+      "offline": {
+        "status": "passed",
+        "loc": 1554,
+        "source_kib": 62.5322265625,
+        "build_seconds": null,
+        "binary_kib": null,
+        "startup_to_health_ms": 61.22137513011694,
+        "cold_getblock_ms": 4.295167047530413,
+        "cold_upstream": {
+          "slot_range_requests": 2,
+          "car_requests": 2,
+          "total_requests": 4,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_upstream": {
+          "slot_range_requests": 0,
+          "car_requests": 30,
+          "total_requests": 30,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_getblock_samples_ms": [
+          2.270958386361599,
+          2.2498751059174538,
+          2.1533751860260963,
+          2.1382919512689114,
+          2.158333081752062,
+          2.189083956182003,
+          2.1242499351501465,
+          2.167833037674427,
+          2.1183332428336143,
+          2.075332682579756,
+          1.9912500865757465,
+          2.0517497323453426,
+          2.0266659557819366,
+          2.007249742746353,
+          1.9883327186107635,
+          1.942166592925787,
+          1.9450411200523376,
+          1.9603339023888111,
+          2.112625166773796,
+          1.9938340410590172,
+          1.8935003317892551,
+          1.884249970316887,
+          2.2465838119387627,
+          2.251958940178156,
+          1.9922079518437386,
+          2.0006666891276836,
+          2.2131670266389847,
+          2.219750080257654,
+          2.132957801222801,
+          2.124291844666004
+        ],
+        "warm_getblock_p50_ms": 2.115479204803705,
+        "warm_getblock_p95_ms": 2.25102121476084,
+        "peak_rss_mib": 13.09375
+      },
+      "live": {
+        "status": "passed",
+        "checks": {
+          "302400001": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "KPY8YHhZTuKXuA5ncyMrhWmLwfEq6ZmLzwYxF1VKneo",
+              "previousBlockhash": "HTCes91cfwRratW4babPCUqe54N8LqCmx7UMC8fsBmuQ",
+              "parentSlot": 302400000,
+              "blockTime": 1732048881,
+              "blockHeight": 280880470,
+              "transaction_count": 140,
+              "first_transaction_fee": 5000
+            }
+          },
+          "302400004": {
+            "status": "passed",
+            "error_code": -32007
+          },
+          "43200000": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "HVHEgGRbukDHtRysZFfbfy4ssdWKW1gDY6gsngCycrvf",
+              "previousBlockhash": "47PrqQ4MJrT4G2GB7uHk5CdZadTKspB5HgDszzxHPJc2",
+              "parentSlot": 43199999,
+              "blockTime": 1603254141,
+              "blockHeight": null,
+              "transaction_count": 208,
+              "first_transaction_fee": 5000
+            }
+          },
+          "getTransaction": {
+            "status": "passed",
+            "error_code": -32601
+          }
+        }
+      }
+    },
+    {
+      "impl": "php",
+      "offline": {
+        "status": "passed",
+        "loc": 1794,
+        "source_kib": 81.173828125,
+        "build_seconds": 0.3860979159362614,
+        "binary_kib": null,
+        "startup_to_health_ms": 123.45866719260812,
+        "cold_getblock_ms": 2.3726667277514935,
+        "cold_upstream": {
+          "slot_range_requests": 2,
+          "car_requests": 2,
+          "total_requests": 4,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_upstream": {
+          "slot_range_requests": 0,
+          "car_requests": 30,
+          "total_requests": 30,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_getblock_samples_ms": [
+          1.0632500052452087,
+          0.9412919171154499,
+          0.9667081758379936,
+          0.9585833176970482,
+          0.8876249194145203,
+          0.8759582415223122,
+          0.8755000308156013,
+          0.8491668850183487,
+          0.8566249161958694,
+          0.8854581974446774,
+          0.8906247094273567,
+          0.9268750436604023,
+          0.8910000324249268,
+          0.8512916974723339,
+          0.8712918497622013,
+          0.8596251718699932,
+          0.8356659673154354,
+          0.8569587953388691,
+          3.0618752352893353,
+          1.0345829650759697,
+          1.0054581798613071,
+          0.9625423699617386,
+          0.9388746693730354,
+          0.9297076612710953,
+          0.9265001863241196,
+          0.9185420349240303,
+          0.940375030040741,
+          0.9622080251574516,
+          0.9474996477365494,
+          0.9065829217433929
+        ],
+        "warm_getblock_p50_ms": 0.9225211106240749,
+        "warm_getblock_p95_ms": 1.0503498371690512,
+        "peak_rss_mib": 33.609375
+      },
+      "live": {
+        "status": "passed",
+        "checks": {
+          "302400001": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "KPY8YHhZTuKXuA5ncyMrhWmLwfEq6ZmLzwYxF1VKneo",
+              "previousBlockhash": "HTCes91cfwRratW4babPCUqe54N8LqCmx7UMC8fsBmuQ",
+              "parentSlot": 302400000,
+              "blockTime": 1732048881,
+              "blockHeight": 280880470,
+              "transaction_count": 140,
+              "first_transaction_fee": 5000
+            }
+          },
+          "302400004": {
+            "status": "passed",
+            "error_code": -32007
+          },
+          "43200000": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "HVHEgGRbukDHtRysZFfbfy4ssdWKW1gDY6gsngCycrvf",
+              "previousBlockhash": "47PrqQ4MJrT4G2GB7uHk5CdZadTKspB5HgDszzxHPJc2",
+              "parentSlot": 43199999,
+              "blockTime": 1603254141,
+              "blockHeight": null,
+              "transaction_count": 208,
+              "first_transaction_fee": 5000
+            }
+          },
+          "getTransaction": {
+            "status": "passed",
+            "error_code": -32601
+          }
+        }
+      }
+    },
+    {
+      "impl": "python",
+      "offline": {
+        "status": "passed",
+        "loc": 1533,
+        "source_kib": 66.8818359375,
+        "build_seconds": null,
+        "binary_kib": null,
+        "startup_to_health_ms": 123.95287537947297,
+        "cold_getblock_ms": 3.4164581447839737,
+        "cold_upstream": {
+          "slot_range_requests": 2,
+          "car_requests": 2,
+          "total_requests": 4,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_upstream": {
+          "slot_range_requests": 0,
+          "car_requests": 30,
+          "total_requests": 30,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_getblock_samples_ms": [
+          1.5228749252855778,
+          1.42241595312953,
+          1.259916927665472,
+          1.260249875485897,
+          1.3230419717729092,
+          1.1895420029759407,
+          1.1997083202004433,
+          1.221624668687582,
+          1.2190002016723156,
+          1.2506251223385334,
+          1.1937501840293407,
+          2.9307911172509193,
+          1.8369159661233425,
+          1.2080417945981026,
+          1.2323753908276558,
+          1.1829580180346966,
+          1.1837496422231197,
+          1.2324578128755093,
+          1.1989590711891651,
+          1.1970000341534615,
+          1.367208082228899,
+          1.2904582545161247,
+          1.322499942034483,
+          1.3042078353464603,
+          1.2805419974029064,
+          1.214166171848774,
+          1.1656666174530983,
+          1.190457958728075,
+          1.2460406869649887,
+          1.2555001303553581
+        ],
+        "warm_getblock_p50_ms": 1.239249249920249,
+        "warm_getblock_p95_ms": 1.6955974977463484,
+        "peak_rss_mib": 25.3125
+      },
+      "live": {
+        "status": "passed",
+        "checks": {
+          "302400001": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "KPY8YHhZTuKXuA5ncyMrhWmLwfEq6ZmLzwYxF1VKneo",
+              "previousBlockhash": "HTCes91cfwRratW4babPCUqe54N8LqCmx7UMC8fsBmuQ",
+              "parentSlot": 302400000,
+              "blockTime": 1732048881,
+              "blockHeight": 280880470,
+              "transaction_count": 140,
+              "first_transaction_fee": 5000
+            }
+          },
+          "302400004": {
+            "status": "passed",
+            "error_code": -32007
+          },
+          "43200000": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "HVHEgGRbukDHtRysZFfbfy4ssdWKW1gDY6gsngCycrvf",
+              "previousBlockhash": "47PrqQ4MJrT4G2GB7uHk5CdZadTKspB5HgDszzxHPJc2",
+              "parentSlot": 43199999,
+              "blockTime": 1603254141,
+              "blockHeight": null,
+              "transaction_count": 208,
+              "first_transaction_fee": 5000
+            }
+          },
+          "getTransaction": {
+            "status": "passed",
+            "error_code": -32601
+          }
+        }
+      }
+    },
+    {
+      "impl": "ruby",
+      "offline": {
+        "status": "passed",
+        "loc": 1589,
+        "source_kib": 61.322265625,
+        "build_seconds": null,
+        "binary_kib": null,
+        "startup_to_health_ms": 124.0170830860734,
+        "cold_getblock_ms": 3.7909578531980515,
+        "cold_upstream": {
+          "slot_range_requests": 2,
+          "car_requests": 2,
+          "total_requests": 4,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_upstream": {
+          "slot_range_requests": 0,
+          "car_requests": 30,
+          "total_requests": 30,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_getblock_samples_ms": [
+          1.81208411231637,
+          1.6242079436779022,
+          1.844458281993866,
+          1.5797088854014874,
+          1.354082953184843,
+          1.5688329003751278,
+          1.4200001023709774,
+          1.3741250149905682,
+          1.5539582818746567,
+          1.4303340576589108,
+          2.928917296230793,
+          2.3752092383801937,
+          1.5603750944137573,
+          1.654834020882845,
+          1.6306671313941479,
+          1.5592081472277641,
+          1.69374980032444,
+          1.6392497345805168,
+          1.497375313192606,
+          1.7975829541683197,
+          1.662916038185358,
+          1.3814163394272327,
+          1.6435408033430576,
+          1.731750089675188,
+          1.4819996431469917,
+          1.6245408914983273,
+          1.5625418163836002,
+          1.3860836625099182,
+          1.886208076030016,
+          1.579292118549347
+        ],
+        "warm_getblock_p50_ms": 1.6019584145396948,
+        "warm_getblock_p95_ms": 2.1551587153226137,
+        "peak_rss_mib": 36.234375
+      },
+      "live": {
+        "status": "passed",
+        "checks": {
+          "302400001": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "KPY8YHhZTuKXuA5ncyMrhWmLwfEq6ZmLzwYxF1VKneo",
+              "previousBlockhash": "HTCes91cfwRratW4babPCUqe54N8LqCmx7UMC8fsBmuQ",
+              "parentSlot": 302400000,
+              "blockTime": 1732048881,
+              "blockHeight": 280880470,
+              "transaction_count": 140,
+              "first_transaction_fee": 5000
+            }
+          },
+          "302400004": {
+            "status": "passed",
+            "error_code": -32007
+          },
+          "43200000": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "HVHEgGRbukDHtRysZFfbfy4ssdWKW1gDY6gsngCycrvf",
+              "previousBlockhash": "47PrqQ4MJrT4G2GB7uHk5CdZadTKspB5HgDszzxHPJc2",
+              "parentSlot": 43199999,
+              "blockTime": 1603254141,
+              "blockHeight": null,
+              "transaction_count": 208,
+              "first_transaction_fee": 5000
+            }
+          },
+          "getTransaction": {
+            "status": "passed",
+            "error_code": -32601
+          }
+        }
+      }
+    },
+    {
+      "impl": "rust",
+      "offline": {
+        "status": "passed",
+        "loc": 6416,
+        "source_kib": 252.3232421875,
+        "build_seconds": 2.177535875234753,
+        "binary_kib": 928.703125,
+        "artifact_files": [
+          "target/release/onlyblocks"
+        ],
+        "startup_to_health_ms": 116.2810418754816,
+        "cold_getblock_ms": 1.8801670521497726,
+        "cold_upstream": {
+          "slot_range_requests": 2,
+          "car_requests": 2,
+          "total_requests": 4,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_upstream": {
+          "slot_range_requests": 0,
+          "car_requests": 30,
+          "total_requests": 30,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_getblock_samples_ms": [
+          0.6643752567470074,
+          0.6017922423779964,
+          0.5710422992706299,
+          0.542791560292244,
+          0.5391249433159828,
+          0.5011670291423798,
+          0.5114166997373104,
+          0.47945789992809296,
+          0.4669581539928913,
+          0.4652910865843296,
+          0.4529575817286968,
+          0.44104084372520447,
+          0.4352079704403877,
+          0.4427083767950535,
+          0.4464169032871723,
+          0.45950012281537056,
+          0.44408300891518593,
+          0.41116727516055107,
+          0.42112497612833977,
+          0.4247077740728855,
+          0.4302919842302799,
+          0.4220004193484783,
+          0.4766252823174,
+          0.4909578710794449,
+          0.4658331163227558,
+          0.44670794159173965,
+          0.4531247541308403,
+          0.4392499104142189,
+          0.49058301374316216,
+          0.466375146061182
+        ],
+        "warm_getblock_p50_ms": 0.4623956046998501,
+        "warm_getblock_p95_ms": 0.5879547679796815,
+        "peak_rss_mib": 4.796875
+      },
+      "live": {
+        "status": "passed",
+        "checks": {
+          "302400001": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "KPY8YHhZTuKXuA5ncyMrhWmLwfEq6ZmLzwYxF1VKneo",
+              "previousBlockhash": "HTCes91cfwRratW4babPCUqe54N8LqCmx7UMC8fsBmuQ",
+              "parentSlot": 302400000,
+              "blockTime": 1732048881,
+              "blockHeight": 280880470,
+              "transaction_count": 140,
+              "first_transaction_fee": 5000
+            }
+          },
+          "302400004": {
+            "status": "passed",
+            "error_code": -32007
+          },
+          "43200000": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "HVHEgGRbukDHtRysZFfbfy4ssdWKW1gDY6gsngCycrvf",
+              "previousBlockhash": "47PrqQ4MJrT4G2GB7uHk5CdZadTKspB5HgDszzxHPJc2",
+              "parentSlot": 43199999,
+              "blockTime": 1603254141,
+              "blockHeight": null,
+              "transaction_count": 208,
+              "first_transaction_fee": 5000
+            }
+          },
+          "getTransaction": {
+            "status": "passed",
+            "error_code": -32601
+          }
+        }
+      }
+    },
+    {
+      "impl": "swift",
+      "offline": {
+        "status": "passed",
+        "loc": 1834,
+        "source_kib": 76.7841796875,
+        "build_seconds": 28.62121579190716,
+        "binary_kib": 369.3203125,
+        "artifact_files": [
+          "build/onlyblocks"
+        ],
+        "startup_to_health_ms": 236.38141620904207,
+        "cold_getblock_ms": 5.425249692052603,
+        "cold_upstream": {
+          "slot_range_requests": 2,
+          "car_requests": 2,
+          "total_requests": 4,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_upstream": {
+          "slot_range_requests": 0,
+          "car_requests": 30,
+          "total_requests": 30,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_getblock_samples_ms": [
+          1.1848327703773975,
+          0.9912918321788311,
+          0.9102500043809414,
+          0.9714579209685326,
+          1.0663331486284733,
+          1.0063746012747288,
+          0.9042504243552685,
+          1.009166706353426,
+          1.1079167015850544,
+          1.0670837946236134,
+          1.0901251807808876,
+          1.006375066936016,
+          1.0208748281002045,
+          0.8862079121172428,
+          0.9098751470446587,
+          0.9187501855194569,
+          0.8726250380277634,
+          0.9054997935891151,
+          0.878708902746439,
+          0.8612079545855522,
+          0.9704581461846828,
+          0.9200000204145908,
+          0.9356248192489147,
+          0.8745826780796051,
+          0.8560419082641602,
+          0.8430406451225281,
+          0.8249999955296516,
+          0.8468339219689369,
+          0.9267921559512615,
+          0.8288328535854816
+        ],
+        "warm_getblock_p50_ms": 0.9193751029670238,
+        "warm_getblock_p95_ms": 1.0999105172231793,
+        "peak_rss_mib": 9.734375
+      },
+      "live": {
+        "status": "passed",
+        "checks": {
+          "302400001": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "KPY8YHhZTuKXuA5ncyMrhWmLwfEq6ZmLzwYxF1VKneo",
+              "previousBlockhash": "HTCes91cfwRratW4babPCUqe54N8LqCmx7UMC8fsBmuQ",
+              "parentSlot": 302400000,
+              "blockTime": 1732048881,
+              "blockHeight": 280880470,
+              "transaction_count": 140,
+              "first_transaction_fee": 5000
+            }
+          },
+          "302400004": {
+            "status": "passed",
+            "error_code": -32007
+          },
+          "43200000": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "HVHEgGRbukDHtRysZFfbfy4ssdWKW1gDY6gsngCycrvf",
+              "previousBlockhash": "47PrqQ4MJrT4G2GB7uHk5CdZadTKspB5HgDszzxHPJc2",
+              "parentSlot": 43199999,
+              "blockTime": 1603254141,
+              "blockHeight": null,
+              "transaction_count": 208,
+              "first_transaction_fee": 5000
+            }
+          },
+          "getTransaction": {
+            "status": "passed",
+            "error_code": -32601
+          }
+        }
+      }
+    },
+    {
+      "impl": "tcl",
+      "offline": {
+        "status": "passed",
+        "loc": 1966,
+        "source_kib": 76.3232421875,
+        "build_seconds": null,
+        "binary_kib": null,
+        "startup_to_health_ms": 63.1263330578804,
+        "cold_getblock_ms": 7.711499929428101,
+        "cold_upstream": {
+          "slot_range_requests": 2,
+          "car_requests": 2,
+          "total_requests": 4,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_upstream": {
+          "slot_range_requests": 0,
+          "car_requests": 30,
+          "total_requests": 30,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_getblock_samples_ms": [
+          3.1561250798404217,
+          3.0978750437498093,
+          3.1731249764561653,
+          3.2984577119350433,
+          3.1477920711040497,
+          3.1115831807255745,
+          3.1233751215040684,
+          3.086167387664318,
+          3.064291086047888,
+          3.076250199228525,
+          3.1449170783162117,
+          3.395874984562397,
+          3.3201659098267555,
+          3.1464998610317707,
+          3.209166694432497,
+          3.1578331254422665,
+          3.224582877010107,
+          3.3221659250557423,
+          3.1960830092430115,
+          3.1824582256376743,
+          3.1539592891931534,
+          3.139208070933819,
+          3.7653748877346516,
+          3.627750091254711,
+          3.2134996727108955,
+          3.1587500125169754,
+          3.3629578538239002,
+          3.2084169797599316,
+          3.127665724605322,
+          3.2489998266100883
+        ],
+        "warm_getblock_p50_ms": 3.1659374944865704,
+        "warm_getblock_p95_ms": 3.52340629324317,
+        "peak_rss_mib": 13.078125
+      },
+      "live": {
+        "status": "passed",
+        "checks": {
+          "302400001": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "KPY8YHhZTuKXuA5ncyMrhWmLwfEq6ZmLzwYxF1VKneo",
+              "previousBlockhash": "HTCes91cfwRratW4babPCUqe54N8LqCmx7UMC8fsBmuQ",
+              "parentSlot": 302400000,
+              "blockTime": 1732048881,
+              "blockHeight": 280880470,
+              "transaction_count": 140,
+              "first_transaction_fee": 5000
+            }
+          },
+          "302400004": {
+            "status": "passed",
+            "error_code": -32007
+          },
+          "43200000": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "HVHEgGRbukDHtRysZFfbfy4ssdWKW1gDY6gsngCycrvf",
+              "previousBlockhash": "47PrqQ4MJrT4G2GB7uHk5CdZadTKspB5HgDszzxHPJc2",
+              "parentSlot": 43199999,
+              "blockTime": 1603254141,
+              "blockHeight": null,
+              "transaction_count": 208,
+              "first_transaction_fee": 5000
+            }
+          },
+          "getTransaction": {
+            "status": "passed",
+            "error_code": -32601
+          }
+        }
+      }
+    },
+    {
+      "impl": "typescript-deno",
+      "offline": {
+        "status": "passed",
+        "loc": 2169,
+        "source_kib": 71.8203125,
+        "build_seconds": null,
+        "binary_kib": null,
+        "startup_to_health_ms": 66.03304203599691,
+        "cold_getblock_ms": 6.828667130321264,
+        "cold_upstream": {
+          "slot_range_requests": 2,
+          "car_requests": 2,
+          "total_requests": 4,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_upstream": {
+          "slot_range_requests": 0,
+          "car_requests": 30,
+          "total_requests": 30,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_getblock_samples_ms": [
+          1.7746668308973312,
+          1.649167388677597,
+          1.433500088751316,
+          1.3218331150710583,
+          1.2876670807600021,
+          1.3047908432781696,
+          1.1611669324338436,
+          1.153790857642889,
+          1.06795784085989,
+          1.0367496870458126,
+          1.0414998978376389,
+          1.0858750902116299,
+          1.0971250012516975,
+          1.1321250349283218,
+          1.2347083538770676,
+          1.174124889075756,
+          1.0888329707086086,
+          1.0899580083787441,
+          1.1398331262171268,
+          1.1640838347375393,
+          1.1773747391998768,
+          1.1485000140964985,
+          1.059624832123518,
+          1.0355417616665363,
+          1.8767076544463634,
+          1.0822918266057968,
+          1.118541695177555,
+          1.0091247968375683,
+          0.9359582327306271,
+          0.9674588218331337
+        ],
+        "warm_getblock_p50_ms": 1.1359790805727243,
+        "warm_getblock_p95_ms": 1.7181920818984509,
+        "peak_rss_mib": 68.921875
+      },
+      "live": {
+        "status": "passed",
+        "checks": {
+          "302400001": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "KPY8YHhZTuKXuA5ncyMrhWmLwfEq6ZmLzwYxF1VKneo",
+              "previousBlockhash": "HTCes91cfwRratW4babPCUqe54N8LqCmx7UMC8fsBmuQ",
+              "parentSlot": 302400000,
+              "blockTime": 1732048881,
+              "blockHeight": 280880470,
+              "transaction_count": 140,
+              "first_transaction_fee": 5000
+            }
+          },
+          "302400004": {
+            "status": "passed",
+            "error_code": -32007
+          },
+          "43200000": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "HVHEgGRbukDHtRysZFfbfy4ssdWKW1gDY6gsngCycrvf",
+              "previousBlockhash": "47PrqQ4MJrT4G2GB7uHk5CdZadTKspB5HgDszzxHPJc2",
+              "parentSlot": 43199999,
+              "blockTime": 1603254141,
+              "blockHeight": null,
+              "transaction_count": 208,
+              "first_transaction_fee": 5000
+            }
+          },
+          "getTransaction": {
+            "status": "passed",
+            "error_code": -32601
+          }
+        }
+      }
+    },
+    {
+      "impl": "zig",
+      "offline": {
+        "status": "passed",
+        "loc": 1654,
+        "source_kib": 72.427734375,
+        "build_seconds": 23.20725516602397,
+        "binary_kib": 1385.2109375,
+        "artifact_files": [
+          "bin/onlyblocks"
+        ],
+        "startup_to_health_ms": 242.30562523007393,
+        "cold_getblock_ms": 4.616166930645704,
+        "cold_upstream": {
+          "slot_range_requests": 2,
+          "car_requests": 2,
+          "total_requests": 4,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_upstream": {
+          "slot_range_requests": 0,
+          "car_requests": 30,
+          "total_requests": 30,
+          "injected_429": 0,
+          "pending_429": 0
+        },
+        "warm_getblock_samples_ms": [
+          1.13783311098814,
+          1.0228748433291912,
+          1.0432498529553413,
+          1.0084579698741436,
+          0.9376248344779015,
+          0.9610829874873161,
+          0.9335419163107872,
+          0.8773752488195896,
+          0.8897501975297928,
+          1.108416821807623,
+          0.8474173955619335,
+          0.8190409280359745,
+          0.8271662518382072,
+          0.8934172801673412,
+          0.9477920830249786,
+          0.8494588546454906,
+          0.8097076788544655,
+          0.8364161476492882,
+          0.9000413119792938,
+          0.8470844477415085,
+          0.8369581773877144,
+          1.025250181555748,
+          1.0877917520701885,
+          1.0095001198351383,
+          0.8944999426603317,
+          0.9112078696489334,
+          0.8259592577815056,
+          0.8079581893980503,
+          0.7224171422421932,
+          0.7646670565009117
+        ],
+        "warm_getblock_p50_ms": 0.8939586114138365,
+        "warm_getblock_p95_ms": 1.0991355404257774,
+        "peak_rss_mib": 4.546875
+      },
+      "live": {
+        "status": "passed",
+        "checks": {
+          "302400001": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "KPY8YHhZTuKXuA5ncyMrhWmLwfEq6ZmLzwYxF1VKneo",
+              "previousBlockhash": "HTCes91cfwRratW4babPCUqe54N8LqCmx7UMC8fsBmuQ",
+              "parentSlot": 302400000,
+              "blockTime": 1732048881,
+              "blockHeight": 280880470,
+              "transaction_count": 140,
+              "first_transaction_fee": 5000
+            }
+          },
+          "302400004": {
+            "status": "passed",
+            "error_code": -32007
+          },
+          "43200000": {
+            "status": "passed",
+            "facts": {
+              "blockhash": "HVHEgGRbukDHtRysZFfbfy4ssdWKW1gDY6gsngCycrvf",
+              "previousBlockhash": "47PrqQ4MJrT4G2GB7uHk5CdZadTKspB5HgDszzxHPJc2",
+              "parentSlot": 43199999,
+              "blockTime": 1603254141,
+              "blockHeight": null,
+              "transaction_count": 208,
+              "first_transaction_fee": 5000
+            }
+          },
+          "getTransaction": {
+            "status": "passed",
+            "error_code": -32601
+          }
+        }
+      }
+    }
+  ],
+  "cross_language_live_parity": {
+    "status": "passed",
+    "slots": {
+      "302400001": {
+        "status": "passed",
+        "matching_groups": [
+          {
+            "facts": {
+              "blockhash": "KPY8YHhZTuKXuA5ncyMrhWmLwfEq6ZmLzwYxF1VKneo",
+              "previousBlockhash": "HTCes91cfwRratW4babPCUqe54N8LqCmx7UMC8fsBmuQ",
+              "parentSlot": 302400000,
+              "blockTime": 1732048881,
+              "blockHeight": 280880470,
+              "transaction_count": 140,
+              "first_transaction_fee": 5000
+            },
+            "implementations": [
+              "arm64-asm",
+              "bash-awk",
+              "bun",
+              "c",
+              "cpp",
+              "csharp",
+              "elixir",
+              "erlang",
+              "fortran",
+              "go",
+              "haskell",
+              "java",
+              "javascript-node",
+              "kotlin",
+              "ocaml",
+              "perl",
+              "php",
+              "python",
+              "ruby",
+              "rust",
+              "swift",
+              "tcl",
+              "typescript-deno",
+              "zig"
+            ]
+          }
+        ],
+        "missing": []
+      },
+      "43200000": {
+        "status": "passed",
+        "matching_groups": [
+          {
+            "facts": {
+              "blockhash": "HVHEgGRbukDHtRysZFfbfy4ssdWKW1gDY6gsngCycrvf",
+              "previousBlockhash": "47PrqQ4MJrT4G2GB7uHk5CdZadTKspB5HgDszzxHPJc2",
+              "parentSlot": 43199999,
+              "blockTime": 1603254141,
+              "blockHeight": null,
+              "transaction_count": 208,
+              "first_transaction_fee": 5000
+            },
+            "implementations": [
+              "arm64-asm",
+              "bash-awk",
+              "bun",
+              "c",
+              "cpp",
+              "csharp",
+              "elixir",
+              "erlang",
+              "fortran",
+              "go",
+              "haskell",
+              "java",
+              "javascript-node",
+              "kotlin",
+              "ocaml",
+              "perl",
+              "php",
+              "python",
+              "ruby",
+              "rust",
+              "swift",
+              "tcl",
+              "typescript-deno",
+              "zig"
+            ]
+          }
+        ],
+        "missing": []
+      }
+    }
+  },
+  "finished_at_utc": "2026-11-25T19:15:40.296923+00:00",
+  "passed": true
+}
