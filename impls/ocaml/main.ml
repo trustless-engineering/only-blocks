@@ -181,7 +181,7 @@ let instruction_json (ix : instruction) keys =
     OObj (("programId", program) :: ("accounts", OArr accounts) :: common)
 
 let account_objects (tx : tx) (lw, lr) =
-  let w = if tx.v0 then lw else [] and r = if tx.v0 then lr else [] in
+  let w, r = if tx.version = V0 then (lw, lr) else ([], []) in
   let keys = tx.keys @ w @ r in
   let ns = List.length tx.keys and nw = List.length w in
   let programs = List.map (fun (ix : instruction) -> ix.program) tx.instructions in
@@ -228,15 +228,16 @@ let meta_json (m : Meta.meta) o keys =
       @ (match m.cost_units with Some v -> [ ("costUnits", u64 v) ] | None -> []) in
   OObj (base @ rewards @ extra)
 
-let unsupported_version =
-  Rpc (-32015, "Transaction version (0) is not supported by the requesting client. Please try the request again with the following configuration parameter: \"maxSupportedTransactionVersion\": 0")
+let unsupported_version v =
+  Rpc (-32015, Printf.sprintf "Transaction version (%d) is not supported by the requesting client. Please try the request again with the following configuration parameter: \"maxSupportedTransactionVersion\": %d" v v)
 
 let transaction_json (tx : tx) (meta : Meta.meta option) o =
-  let meta =
-    if tx.v0 then begin
-      if o.max_version = None then raise unsupported_version;
-      match meta with None -> Some Meta.empty_meta | m -> m
-    end else meta in
+  let numeric_version = match tx.version with Legacy -> None | V0 -> Some 0 | V1 _ -> Some 1 in
+  let meta = match numeric_version with
+    | None -> meta
+    | Some v ->
+        if Option.value o.max_version ~default:(-1) < v then raise (unsupported_version v);
+        Some (Option.value meta ~default:Meta.empty_meta) in
   let parsed = o.encoding = "jsonParsed" and accounts_only = o.details = "accounts" in
   let loaded = match meta with Some m -> (m.loaded_writable, m.loaded_readonly) | None -> ([], []) in
   let keys = ref None in
@@ -258,19 +259,26 @@ let transaction_json (tx : tx) (meta : Meta.meta option) o =
           else [ ("header", OObj [ ("numRequiredSignatures", int tx.nrs); ("numReadonlySignedAccounts", int tx.nros);
                                    ("numReadonlyUnsignedAccounts", int tx.nrou) ]) ] in
         let instructions = List.map (fun ix -> instruction_json ix !keys) tx.instructions in
-        let lookups =
-          if tx.v0 then
+        let version_fields =
+          match tx.version with
+          | V0 ->
             [ ("addressTableLookups", OArr (List.map (fun l ->
                   OObj [ ("accountKey", str (base58 l.table)); ("writableIndexes", byte_list l.writable);
                          ("readonlyIndexes", byte_list l.readonly) ]) tx.lookups)) ]
-          else [] in
+          | V1 config ->
+            [ ("transactionConfig", OObj [
+                ("priorityFee", opt Json.u64 config.priority_fee);
+                ("computeUnitLimit", opt int config.compute_unit_limit);
+                ("loadedAccountsDataSizeLimit", opt int config.loaded_accounts_data_size_limit);
+                ("heapSize", opt int config.heap_size) ]) ]
+          | Legacy -> [] in
         OObj [ signatures; ("message", OObj (header @ [ ("accountKeys", account_keys); ("recentBlockhash", str tx.recent);
-                                                        ("instructions", OArr instructions) ] @ lookups)) ]
+                                                        ("instructions", OArr instructions) ] @ version_fields)) ]
       end in
   let meta_out = match meta with None -> ONull | Some m -> meta_json m o !keys in
   let version =
     match meta, o.max_version with
-    | Some _, Some _ -> [ ("version", if tx.v0 then int 0 else str "legacy") ]
+    | Some _, Some _ -> [ ("version", match numeric_version with None -> str "legacy" | Some v -> int v) ]
     | _ -> [] in
   OObj ([ ("transaction", transaction); ("meta", meta_out) ] @ version)
 
@@ -350,10 +358,12 @@ let block_params params =
     | Some _ -> invalid_params () in
   let encoding = choice "encoding" "json" [ "json"; "jsonParsed"; "base64"; "base58" ] in
   let details = choice "transactionDetails" "full" [ "full"; "accounts"; "signatures"; "none" ] in
-  if details = "accounts" && encoding <> "json" then invalid_params ();
   let rewards_on = match field "rewards" with None -> true | Some (Bool b) -> b | Some _ -> invalid_params () in
   ignore (choice "commitment" "finalized" [ "finalized"; "confirmed" ]);
   let max_version = Option.map (fun v -> Int64.to_int (uint_param v 255L)) (field "maxSupportedTransactionVersion") in
+  if encoding = "base58" && Option.value max_version ~default:0 >= 1 then
+    raise (Rpc (-32602, "base58 encoding is not supported with maxSupportedTransactionVersion >= 1"));
+  if details = "accounts" && encoding <> "json" then invalid_params ();
   (slot, { encoding; details; rewards_on; max_version })
 
 let id_json = function Some (Num t) -> ORaw t | Some (Str s) -> OStr s | _ -> ONull

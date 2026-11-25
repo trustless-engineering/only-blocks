@@ -25,9 +25,6 @@ defmodule OnlyBlocks.Rpc do
     SysvarStakeHistory1111111111111111111111111 NativeLoader1111111111111111111111111111111
     Sysvar1111111111111111111111111111111111111))
 
-  @unsupported_version "Transaction version (0) is not supported by the requesting client. " <>
-                         "Please try the request again with the following configuration parameter: " <>
-                         ~s("maxSupportedTransactionVersion": 0)
 
   # ---------------------------------------------------------------- envelope
 
@@ -119,7 +116,7 @@ defmodule OnlyBlocks.Rpc do
     rewards? = option.("rewards", true)
 
     unless encoding in ~w(json jsonParsed base64 base58) and details in ~w(full accounts signatures none) and
-             (details != "accounts" or encoding == "json") and is_boolean(rewards?) and
+             is_boolean(rewards?) and
              option.("commitment", "finalized") in ~w(finalized confirmed),
            do: invalid!()
 
@@ -129,6 +126,11 @@ defmodule OnlyBlocks.Rpc do
         value -> uint_param(value, 255)
       end
 
+    if encoding == "base58" and is_integer(max_version) and max_version >= 1,
+      do: throw({:rpc, -32602, "base58 encoding is not supported with maxSupportedTransactionVersion >= 1"})
+
+    if details == "accounts" and encoding != "json", do: invalid!()
+
     {slot, encoding, details, rewards?, max_version}
   end
 
@@ -136,11 +138,15 @@ defmodule OnlyBlocks.Rpc do
 
   # ---------------------------------------------------------------- transactions
 
-  def transaction_json(%{version: 0}, _meta, _encoding, _details, _rewards?, :none),
-    do: throw({:rpc, -32015, @unsupported_version})
-
   def transaction_json(%{version: version} = tx, meta, encoding, details, rewards?, max_version) do
-    meta = if version == 0 and meta == :none, do: Meta.empty_meta(), else: meta
+    if is_integer(version) and (max_version == :none or version > max_version) do
+      throw({:rpc, -32015,
+             "Transaction version (#{version}) is not supported by the requesting client. " <>
+             "Please try the request again with the following configuration parameter: " <>
+             ~s("maxSupportedTransactionVersion": #{version})})
+    end
+
+    meta = if is_integer(version) and meta == :none, do: Meta.empty_meta(), else: meta
     parsed? = encoding == "jsonParsed"
     accounts_only? = details == "accounts"
     static = Enum.map(tx.keys, &Wire.base58/1)
@@ -174,11 +180,11 @@ defmodule OnlyBlocks.Rpc do
         else: Map.put(m, :header, %{numRequiredSignatures: nrs, numReadonlySignedAccounts: nros, numReadonlyUnsignedAccounts: nrou})
     end)
     |> then(fn m ->
-      case tx.lookups do
-        nil ->
-          m
+      case tx do
+        %{version: 1, config: config} ->
+          Map.put(m, :transactionConfig, config)
 
-        lookups ->
+        %{version: 0, lookups: lookups} ->
           Map.put(
             m,
             :addressTableLookups,
@@ -186,6 +192,9 @@ defmodule OnlyBlocks.Rpc do
               do: %{accountKey: Wire.base58(key), writableIndexes: :binary.bin_to_list(w), readonlyIndexes: :binary.bin_to_list(r)}
             )
           )
+
+        _ ->
+          m
       end
     end)
   end

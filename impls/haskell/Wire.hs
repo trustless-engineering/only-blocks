@@ -6,7 +6,7 @@ module Wire
   , Car (..), indexCar, node, member, link, links
   , framePayload, crc64, fnv1a
   , base58, base64, zeroHash, pubkey
-  , Instruction (..), Lookup (..), Tx (..), transaction, compiled
+  , Instruction (..), Lookup (..), TransactionConfig (..), TransactionVersion (..), Tx (..), transaction, compiled
   ) where
 
 import Control.Monad
@@ -312,8 +312,13 @@ data Instruction = Instruction
 
 data Lookup = Lookup { lkTable :: !B.ByteString, lkWritable :: !B.ByteString, lkReadonly :: !B.ByteString }
 
+data TransactionConfig = TransactionConfig
+  { priorityFee, computeUnitLimit, loadedAccountsDataSizeLimit, heapSize :: !(Maybe Word64) }
+
+data TransactionVersion = Legacy | V0 | V1 TransactionConfig
+
 data Tx = Tx
-  { txV0 :: !Bool
+  { txVersion :: !TransactionVersion
   , txSignatures :: [B.ByteString]
   , txNrs, txNros, txNrou :: !Int
   , txKeys :: [B.ByteString]              -- ^ Base58 static account keys
@@ -338,20 +343,45 @@ transaction bytes = do
   where
     vec minimum p = compactU16 >>= \n -> countOf (fromIntegral n) minimum p
     parser = do
-      sigs <- vec 64 (takeBytes 64)
+      first <- u8
+      case first of
+        0x81 -> v1
+        n | n < 0x80 -> legacyOrV0 n
+        _ -> failP "invalid transaction discriminator"
+    legacyOrV0 nsig = do
+      sigs <- countOf (fromIntegral nsig) 64 (takeBytes 64)
       prefix <- u8
-      (v0, nrs) <-
-        if prefix .&. 0x80 == 0 then pure (False, fromIntegral prefix)
-        else case prefix .&. 0x7f of
-          0 -> (,) True . fromIntegral <$> u8
-          127 -> failP "off-chain messages are not accepted"
+      (version, nrs) <-
+        if prefix < 0x80 then pure (Legacy, fromIntegral prefix)
+        else case prefix of
+          0x80 -> (,) V0 . fromIntegral <$> u8
           _ -> failP "unsupported transaction version"
       nros <- fromIntegral <$> u8
       nrou <- fromIntegral <$> u8
       keys <- vec 32 (base58 <$> takeBytes 32)
       recent <- base58 <$> takeBytes 32
       ixs <- vec 3 (compiled (Just 1))
-      lookups <- if v0
-        then vec 34 (Lookup <$> takeBytes 32 <*> (compactU16 >>= takeBytes) <*> (compactU16 >>= takeBytes))
-        else pure []
-      pure (Tx v0 sigs nrs nros nrou keys recent ixs lookups B.empty)
+      lookups <- case version of
+        V0 -> vec 34 (Lookup <$> takeBytes 32 <*> (compactU16 >>= takeBytes) <*> (compactU16 >>= takeBytes))
+        _ -> pure []
+      pure (Tx version sigs nrs nros nrou keys recent ixs lookups B.empty)
+    v1 = do
+      nrs <- fromIntegral <$> u8
+      nros <- fromIntegral <$> u8
+      nrou <- fromIntegral <$> u8
+      mask <- u32le
+      let feeBits = mask .&. 3
+          configValue bits p = if mask .&. bits == 0 then pure Nothing else Just <$> p
+      when (mask > 0x1f || (feeBits /= 0 && feeBits /= 3)) $ failP "invalid transaction config mask"
+      recent <- base58 <$> takeBytes 32
+      numInstructions <- fromIntegral <$> u8
+      numKeys <- fromIntegral <$> u8
+      keys <- countOf numKeys 32 (base58 <$> takeBytes 32)
+      config <- TransactionConfig <$> configValue 3 u64le <*> configValue 4 u32le
+                                  <*> configValue 8 u32le <*> configValue 16 u32le
+      headers <- countOf numInstructions 4 ((,,) <$> u8 <*> u8 <*> u16le)
+      ixs <- forM headers $ \(program, numAccounts, dataLength) ->
+        Instruction (fromIntegral program) <$> takeBytes (fromIntegral numAccounts)
+                                           <*> takeBytes (fromIntegral dataLength) <*> pure (Just 1)
+      sigs <- countOf (fromIntegral nrs) 64 (takeBytes 64)
+      pure (Tx (V1 config) sigs nrs nros nrou keys recent ixs [] B.empty)

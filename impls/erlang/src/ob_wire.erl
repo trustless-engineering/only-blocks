@@ -289,16 +289,23 @@ pubkey(_) -> fail(expected_32_bytes).
 
 %% ---------------------------------------------------------------- transactions
 
-%% Returns #{version, signatures, header, keys, recent, instructions, lookups, raw}.
 transaction(Data) ->
-    {NSig, R0} = compact(Data),
+    {Tx, Rest} =
+        case Data of
+            <<16#81, R/binary>> -> transaction_v1(R);
+            <<NSig, R/binary>> when NSig < 16#80 -> transaction_legacy_or_v0(NSig, R);
+            _ -> fail(invalid_transaction_discriminator)
+        end,
+    Tx#{raw => take(Data, Rest)}.
+
+transaction_legacy_or_v0(NSig, R0) ->
     NSig =< byte_size(R0) div 64 orelse fail(signature_count),
     <<SigBytes:(NSig * 64)/binary, R1/binary>> = R0,
     Sigs = [S || <<S:64/binary>> <= SigBytes],
     {Version, Header, R2} =
         case R1 of
             <<1:1, 0:7, A, B, C, X/binary>> -> {0, {A, B, C}, X};
-            <<0:1, _:7, B, C, X/binary>> -> {legacy, {binary:first(R1), B, C}, X};
+            <<A, B, C, X/binary>> when A < 16#80 -> {legacy, {A, B, C}, X};
             <<1:1, _:7, _/binary>> -> fail(unsupported_transaction_version);
             _ -> fail(truncated_transaction)
         end,
@@ -310,8 +317,37 @@ transaction(Data) ->
             0 -> counted(R5, 34, fun lookup/1);
             legacy -> {undefined, R5}
         end,
-    #{version => Version, signatures => Sigs, header => Header, keys => Keys, recent => Recent,
-      instructions => Instrs, lookups => Lookups, raw => take(Data, R6)}.
+    {#{version => Version, signatures => Sigs, header => Header, keys => Keys, recent => Recent,
+       instructions => Instrs, lookups => Lookups}, R6}.
+
+transaction_v1(<<A, B, C, Mask:32/little, Recent:32/binary, NIx, NKeys, R0/binary>>) ->
+    FeeBits = Mask band 3,
+    (Mask =< 16#1F andalso (FeeBits =:= 0 orelse FeeBits =:= 3)) orelse fail(invalid_config_mask),
+    <<KeyBytes:(NKeys * 32)/binary, R1/binary>> = R0,
+    Keys = [K || <<K:32/binary>> <= KeyBytes],
+    {PriorityFee, R2} = config_value(Mask, 3, 64, R1),
+    {ComputeLimit, R3} = config_value(Mask, 4, 32, R2),
+    {LoadedDataLimit, R4} = config_value(Mask, 8, 32, R3),
+    {HeapSize, R5} = config_value(Mask, 16, 32, R4),
+    Config = #{priorityFee => PriorityFee, computeUnitLimit => ComputeLimit,
+               loadedAccountsDataSizeLimit => LoadedDataLimit, heapSize => HeapSize},
+    <<HeaderBytes:(NIx * 4)/binary, R6/binary>> = R5,
+    Headers = [{P, NA, ND} || <<P, NA, ND:16/little>> <= HeaderBytes],
+    {Instrs, R7} = lists:mapfoldl(
+                     fun({P, NA, ND}, Payload) ->
+                             <<Accounts:NA/binary, Data:ND/binary, Rest/binary>> = Payload,
+                             {{P, Accounts, Data}, Rest}
+                     end, R6, Headers),
+    <<SigBytes:(A * 64)/binary, Rest/binary>> = R7,
+    Sigs = [S || <<S:64/binary>> <= SigBytes],
+    {#{version => 1, signatures => Sigs, header => {A, B, C}, keys => Keys, recent => Recent,
+       instructions => Instrs, config => Config}, Rest};
+transaction_v1(_) -> fail(truncated_transaction).
+
+config_value(Mask, Bits, _Width, R) when (Mask band Bits) =:= 0 -> {null, R};
+config_value(_Mask, _Bits, Width, R) ->
+    <<Value:Width/little, Rest/binary>> = R,
+    {Value, Rest}.
 
 counted(Bin, Min, Fun) ->
     {N, R} = compact(Bin),

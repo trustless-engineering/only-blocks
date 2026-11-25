@@ -69,8 +69,10 @@ defmodule OnlyBlocks.Zstd do
       end
 
     if content != nil and total + content > @max_out, do: fail("decompressed size limit exceeded")
-    {out, r4} = blocks(r3, <<>>, %{rep: {1, 4, 8}, huf: nil, ll: nil, off: nil, ml: nil}, total)
-    if content != nil and content != byte_size(out), do: fail("frame content size mismatch")
+    st = %{rep: {1, 4, 8}, huf: nil, ll: nil, off: nil, ml: nil}
+    {history, chunks, size, r4} = blocks(r3, <<>>, [], 0, st, @max_out - total)
+    if content != nil and content != size, do: fail("frame content size mismatch")
+    out = flush_chunks(history, chunks)
 
     case {chk, r4} do
       {0, _} ->
@@ -87,26 +89,30 @@ defmodule OnlyBlocks.Zstd do
 
   defp frame(_, _), do: fail("truncated frame header")
 
-  defp blocks(<<header::little-24, rest::binary>>, out, st, total) do
+  # Only compressed blocks need the preceding output as contiguous match history.
+  defp flush_chunks(history, []), do: history
+  defp flush_chunks(history, chunks), do: history <> IO.iodata_to_binary(Enum.reverse(chunks))
+
+  defp blocks(<<header::little-24, rest::binary>>, history, chunks, written, st, limit) do
     last = header &&& 1
+    type = header >>> 1 &&& 3
     size = header >>> 3
     if size > @block_max, do: fail("block too large")
+    if type in [0, 1] and written + size > limit, do: fail("decompressed size limit exceeded")
 
-    {out, st, next} =
-      case {header >>> 1 &&& 3, rest} do
+    {history, chunks, written, st, next} =
+      case {type, rest} do
         {0, <<raw::binary-size(size), r::binary>>} ->
-          if total + byte_size(out) + size > @max_out, do: fail("decompressed size limit exceeded")
-          {out <> raw, st, r}
+          {history, [raw | chunks], written + size, st, r}
 
         {1, <<byte, r::binary>>} ->
-          if total + byte_size(out) + size > @max_out, do: fail("decompressed size limit exceeded")
-          {out <> :binary.copy(<<byte>>, size), st, r}
+          {history, [:binary.copy(<<byte>>, size) | chunks], written + size, st, r}
 
         {2, <<block::binary-size(size), r::binary>>} ->
           {literals, seq_data, st} = literals(block, st)
           {seqs, st} = sequences(seq_data, st)
-          {out, rep} = execute(seqs, literals, out, st.rep, total)
-          {out, %{st | rep: rep}, r}
+          {out, rep} = execute(seqs, literals, flush_chunks(history, chunks), st.rep, limit)
+          {out, [], byte_size(out), %{st | rep: rep}, r}
 
         {3, _} ->
           fail("reserved block type")
@@ -115,11 +121,10 @@ defmodule OnlyBlocks.Zstd do
           fail("truncated block")
       end
 
-    if total + byte_size(out) > @max_out, do: fail("decompressed size limit exceeded")
-    if last == 1, do: {out, next}, else: blocks(next, out, st, total)
+    if last == 1, do: {history, chunks, written, next}, else: blocks(next, history, chunks, written, st, limit)
   end
 
-  defp blocks(_, _, _, _), do: fail("truncated block header")
+  defp blocks(_, _, _, _, _, _), do: fail("truncated block header")
 
   # ---------------------------------------------------------------- literals
 
@@ -485,11 +490,15 @@ defmodule OnlyBlocks.Zstd do
     end
   end
 
-  defp execute([], lit, out, rep, _total), do: {out <> lit, rep}
+  defp execute([], lit, out, rep, limit) do
+    if byte_size(out) + byte_size(lit) > limit, do: fail("decompressed size limit exceeded")
+    {out <> lit, rep}
+  end
 
-  defp execute([{ll, ov, ml} | seqs], lit, out, {r0, r1, r2} = rep, total) do
+  defp execute([{ll, ov, ml} | seqs], lit, out, {r0, r1, r2} = rep, limit) do
     case lit do
       <<l::binary-size(ll), lit::binary>> ->
+        if byte_size(out) + ll + ml > limit, do: fail("decompressed size limit exceeded")
         out = out <> l
 
         {offset, rep} =
@@ -508,8 +517,7 @@ defmodule OnlyBlocks.Zstd do
 
         size = byte_size(out)
         if offset <= 0 or offset > size, do: fail("match offset out of range")
-        if total + size + ml > @max_out, do: fail("decompressed size limit exceeded")
-        execute(seqs, lit, copy_match(out, size, offset, ml), rep, total)
+        execute(seqs, lit, copy_match(out, size, offset, ml), rep, limit)
 
       _ ->
         fail("sequence consumes more literals than available")

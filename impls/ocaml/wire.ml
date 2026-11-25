@@ -19,6 +19,7 @@ let need r n = if n < 0 || n > left r then fail "truncated binary value"
 let u8 r = need r 1; let v = Char.code (String.unsafe_get r.s r.pos) in r.pos <- r.pos + 1; v
 let skip r n = need r n; r.pos <- r.pos + n
 let take r n = need r n; let v = String.sub r.s r.pos n in r.pos <- r.pos + n; v
+let u16 r = need r 2; let v = String.get_uint16_le r.s r.pos in r.pos <- r.pos + 2; v
 let u32 r = need r 4; let v = Int32.to_int (String.get_int32_le r.s r.pos) land 0xFFFFFFFF in r.pos <- r.pos + 4; v
 let u64 r = need r 8; let v = String.get_int64_le r.s r.pos in r.pos <- r.pos + 8; v
 let f64 r = Int64.float_of_bits (u64 r)
@@ -361,8 +362,17 @@ type instruction = { program : int; accounts : string; data : string; height : i
 
 type lookup = { table : string; writable : string; readonly : string }
 
+type transaction_config = {
+  priority_fee : int64 option;
+  compute_unit_limit : int option;
+  loaded_accounts_data_size_limit : int option;
+  heap_size : int option;
+}
+
+type transaction_version = Legacy | V0 | V1 of transaction_config
+
 type tx = {
-  v0 : bool;
+  version : transaction_version;
   signatures : string list;          (* raw 64-byte signatures *)
   nrs : int; nros : int; nrou : int;
   keys : string list;                (* Base58 static account keys *)
@@ -378,14 +388,12 @@ let compiled r height =
   let data = take r (compact r) in
   { program; accounts; data; height }
 
-let transaction (data : string) : tx =
-  let r = reader data in
-  let signatures = items r (compact r) 64 (fun () -> take r 64) in
+let transaction_legacy_or_v0 r nsig =
+  let signatures = items r nsig 64 (fun () -> take r 64) in
   let p = u8 r in
-  let v0, nrs =
-    if p land 0x80 = 0 then (false, p)
-    else if p land 0x7f = 0 then (true, u8 r)
-    else if p land 0x7f = 127 then fail "off-chain messages are not accepted"
+  let version, nrs =
+    if p < 0x80 then (Legacy, p)
+    else if p = 0x80 then (V0, u8 r)
     else fail "unsupported transaction version" in
   let nros = u8 r in
   let nrou = u8 r in
@@ -393,11 +401,47 @@ let transaction (data : string) : tx =
   let recent = base58 (take r 32) in
   let instructions = items r (compact r) 3 (fun () -> compiled r (Some 1)) in
   let lookups =
-    if v0 then
+    if version = V0 then
       items r (compact r) 34 (fun () ->
         let table = take r 32 in
         let writable = take r (compact r) in
         let readonly = take r (compact r) in
         { table; writable; readonly })
     else [] in
-  { v0; signatures; nrs; nros; nrou; keys; recent; instructions; lookups; raw = String.sub data 0 r.pos }
+  { version; signatures; nrs; nros; nrou; keys; recent; instructions; lookups; raw = "" }
+
+let transaction_v1 r =
+  let nrs = u8 r in
+  let nros = u8 r in
+  let nrou = u8 r in
+  let mask = u32 r in
+  let fee_bits = mask land 3 in
+  if mask > 0x1F || (fee_bits <> 0 && fee_bits <> 3) then fail "invalid transaction config mask";
+  let recent = base58 (take r 32) in
+  let num_instructions = u8 r in
+  let keys = items r (u8 r) 32 (fun () -> base58 (take r 32)) in
+  let config_value bits read = if mask land bits = 0 then None else Some (read r) in
+  let priority_fee = config_value 3 u64 in
+  let compute_unit_limit = config_value 4 u32 in
+  let loaded_accounts_data_size_limit = config_value 8 u32 in
+  let heap_size = config_value 16 u32 in
+  let headers = items r num_instructions 4 (fun () ->
+      let program = u8 r in
+      let num_accounts = u8 r in
+      let data_len = u16 r in
+      (program, num_accounts, data_len)) in
+  let instructions = List.map (fun (program, num_accounts, data_len) ->
+      let accounts = take r num_accounts in
+      let data = take r data_len in
+      { program; accounts; data; height = Some 1 }) headers in
+  let signatures = items r nrs 64 (fun () -> take r 64) in
+  let version = V1 { priority_fee; compute_unit_limit; loaded_accounts_data_size_limit; heap_size } in
+  { version; signatures; nrs; nros; nrou; keys; recent; instructions; lookups = []; raw = "" }
+
+let transaction data =
+  let r = reader data in
+  let tx = match u8 r with
+    | 0x81 -> transaction_v1 r
+    | nsig when nsig < 0x80 -> transaction_legacy_or_v0 r nsig
+    | _ -> fail "invalid transaction discriminator" in
+  { tx with raw = String.sub data 0 r.pos }
