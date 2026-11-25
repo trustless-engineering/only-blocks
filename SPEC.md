@@ -28,7 +28,7 @@ differs from the original oracle, §10 says so.
 
 | Property | Requirement |
 |---|---|
-| **Single OS process** | The server is one process. No sidecars, helper daemons or worker processes. The only exception is the HTTPS transport exception in §3.3. |
+| **Single OS process** | The server is one process. No sidecars, helper daemons or worker processes. The exceptions are the HTTPS transport exception in §3.3 and a runtime's own fixed plumbing: a VM's port helper (every BEAM forks `erl_child_setup`) and, for `bash-awk`, whose language is the shell, a `bash` `accept` listener with its handler subshells, one persistent `awk` engine coprocess, and the OS-shipped POSIX `sh`, `od` and `sleep` it pipes Range bytes and retry waits through. All decoding stays in the implementation's own code, and third-party binaries (`zstd`, `xxd`, `jq`, …) are forbidden. |
 | **Zero disk** | After start-up the server MUST NOT create, write, append to, rename or delete any file or directory anywhere: not in `TMPDIR`, not in the implementation directory, not in a cache directory. Every cache lives in **bounded RAM**. Reading its own program/source files at start-up is fine. Logging goes to stdout/stderr only. |
 | **Zero third-party dependencies** | Only the language's own standard library and the OS (§3). |
 | **Historical only** | Data comes exclusively from Old Faithful (`https://files.old-faithful.net` by default). There is no ledger, validator, database or fallback RPC. |

@@ -33,7 +33,7 @@ BEGIN {
     srand()
 
     base = ENVIRON["OB_BASE"]; DIR = ENVIRON["OB_DIR"]; BASHBIN = ENVIRON["OB_BASH"]
-    ZSTD = ENVIRON["OB_ZSTD"]; XXD = ENVIRON["OB_XXD"]; OD = ENVIRON["OB_OD"]; CURL = ENVIRON["OB_CURL"]
+    OD = ENVIRON["OB_OD"]; CURL = ENVIRON["OB_CURL"]
     # Base URL pieces (server.bash already normalized and validated it).
     BASE_URL = base
     BASE_SCHEME = substr(base, 1, index(base, ":") - 1)
