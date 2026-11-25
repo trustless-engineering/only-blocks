@@ -63,10 +63,29 @@ reply_json() {
         "${#2}" "$2" >&"$1"
 }
 
+# read_exact FD COUNT: appends exactly COUNT bytes to $body. Bash variables
+# cannot hold NUL, and `read -N` silently skips NULs and then waits for more
+# input, so NUL is made the delimiter instead: every early stop is a NUL,
+# which is counted as one byte and recorded in $nul.
+read_exact() {
+    local fd=$1 remaining=$2 chunk
+    while ((remaining > 0)); do
+        IFS= read -r -d '' -n "$remaining" -t 30 -u "$fd" chunk || return 1
+        body+=$chunk
+        if ((${#chunk} < remaining)); then
+            nul=1
+            ((remaining -= ${#chunk} + 1))
+        else
+            ((remaining -= ${#chunk}))
+        fi
+    done
+    return 0
+}
+
 # One connection, in a forked subshell: parse the request, hand the body to
 # the engine, relay its reply.
 handle() {
-    local fd=$1 seq=$2 line method target name value cl= te= body= chunk n total=0 head resp hdrs=0
+    local fd=$1 seq=$2 line method target name value cl= te= body= n total=0 head resp hdrs=0 nul=0
     trap '' PIPE
     IFS= read -r -t 10 -u "$fd" line || return
     line=${line%$'\r'}
@@ -97,20 +116,18 @@ handle() {
             n=$((16#$line))
             ((n == 0)) && break
             ((total += n, total > 1048576)) && { reply_status "$fd" "413 Payload Too Large"; return; }
-            IFS= read -r -N "$n" -t 30 -u "$fd" chunk || return
-            body+=$chunk
+            read_exact "$fd" "$n" || return
             IFS= read -r -t 10 -u "$fd" line || return
         done
         while IFS= read -r -t 10 -u "$fd" line && [[ -n ${line%$'\r'} ]]; do :; done
     elif [[ -n $cl ]]; then
         [[ $cl =~ ^[0-9]+$ ]] || { reply_status "$fd" "400 Bad Request"; return; }
         ((${#cl} > 9 || 10#$cl > 1048576)) && { reply_status "$fd" "413 Payload Too Large"; return; }
-        if ((10#$cl > 0)); then
-            IFS= read -r -N "$((10#$cl))" -t 30 -u "$fd" body || return
-        fi
+        read_exact "$fd" "$((10#$cl))" || return
     fi
-    # The engine frames bodies with U+0001, which JSON never allows unescaped.
-    if [[ $body == *$'\001'* ]]; then
+    # JSON never contains a raw NUL or U+0001; the engine frames bodies with
+    # U+0001, so either one is answered here as a parse error.
+    if ((nul)) || [[ $body == *$'\001'* ]]; then
         reply_json "$fd" '{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error"},"id":null}'
         return
     fi
@@ -122,13 +139,23 @@ handle() {
     reply_json "$fd" "$resp"
 }
 
+# Shutdown. The blocking accept(2) restarts after a signal, so a trap alone
+# would wait for the next client. A tiny sentinel subshell (same process
+# group) therefore answers SIGINT/SIGTERM by connecting to our own port,
+# which returns accept and lets the trap exit 0. It polls for its parent so
+# it never outlives the server.
+trap 'exit 0' TERM INT
+(
+    exec {TO}>&- {FROM}<&-
+    trap '{ exec 3<>"/dev/tcp/$host/$port"; } 2>/dev/null; exit 0' TERM INT
+    while kill -0 "$$" 2>/dev/null; do sleep 1; done
+) &
+
 # Single-threaded accept loop. `accept` closes its listening socket once a
 # client connects, so the connection is handed to a background handler
 # straight away and the port is listening again long before that handler
 # replies. Handlers run one at a time (wait for the previous one first), which
-# keeps the engine's pipes strictly request/reply. SIGINT/SIGTERM keep their
-# default action: the blocking accept(2) restarts after SIGCHLD and would
-# otherwise delay a trap, and the harness signals the whole process group.
+# keeps the engine's pipes strictly request/reply.
 seq=0 prev= fails=0
 while :; do
     if ! accept -b "$host" -v fd "$port" 2>/dev/null; then

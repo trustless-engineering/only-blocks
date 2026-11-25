@@ -720,12 +720,7 @@ pb_reward:
     bl pb_utf8
     stp x22, x23, [sp, #16]
     b 1b
-9:  sub x9, x27, #1
-    cmp x9, #3
-    csinc x9, xzr, x27, hi       // 1..4 kept, anything else -> 0
-    cmp x27, #0
-    csel x9, xzr, x9, eq
-    sub x10, x27, #1
+9:  sub x10, x27, #1            // reward_type 1..4 kept, anything else -> none
     cmp x10, #3
     csel x9, x27, xzr, ls
     str x9, [x24, #RW_TYPE]

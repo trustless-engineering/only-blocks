@@ -57,6 +57,7 @@ The server is one Bash process plus its AWK coprocess. Each connection adds a
 short-lived handler subshell, and each Range read or zstd call adds a few
 short-lived tool processes (`od`, `xxd`, `zstd`, `curl`). No temporary files,
 FIFOs, here-docs or here-strings are used. Every byte stays in pipes or RAM.
-SIGINT and SIGTERM keep their default action: a blocking `accept(2)` restarts
-after SIGCHLD, so a trap would not run until the next connection. The harness
-signals the whole process group, so everything exits immediately.
+A blocking `accept(2)` restarts after a signal, so a SIGTERM or SIGINT trap
+alone would wait for the next client. A sentinel subshell therefore answers
+those signals by connecting to the server's own port. That returns `accept`,
+so the trap can exit with status 0.

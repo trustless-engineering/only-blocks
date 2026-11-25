@@ -511,7 +511,8 @@ serve_conn:
     ldr x2, [x20, #BUF_LEN]
     add x2, x0, x2
     LA x3, g_chunk
-    bl chunked_decode
+    mov x4, #MAX_BODY
+    bl _chunked_decode
     cmp x0, #1
     b.eq 35f
     cmn x0, #2
@@ -560,11 +561,11 @@ serve_conn:
     mov w0, w19
     LA x1, g_hdrbuf
     mov x2, x22
-    bl write_all
+    bl _write_all
     LA x9, _g_out
     ldp x1, x2, [x9]
     mov w0, w19
-    bl write_all
+    bl _write_all
     LEAVE 64
 
 93: LA x1, Lr405
@@ -582,7 +583,7 @@ serve_conn:
     mov x2, x0
     mov x1, x22
     mov w0, w19
-    bl write_all
+    bl _write_all
 98: LEAVE 64
 
 // header line helpers ----------------------------------------------------
@@ -647,113 +648,6 @@ line_contains_ci:
     ret
 9:  mov x0, #1
     ret
-
-// chunked_decode(x0 = unused, x1 = start, x2 = end, x3 = out Buf)
-// -> 1 complete, 0 need more, -1 malformed, -2 too large.
-    .p2align 2
-chunked_decode:
-    ENTER
-    mov x19, x1
-    mov x20, x2
-    mov x21, x3
-    str xzr, [x21, #BUF_LEN]
-1:  mov x22, #0                  // chunk size
-    mov x23, #0                  // digits
-2:  cmp x19, x20
-    b.hs 80f
-    ldrb w9, [x19]
-    sub w10, w9, #'0'
-    cmp w10, #9
-    b.ls 3f
-    orr w9, w9, #0x20
-    sub w10, w9, #'a'
-    cmp w10, #5
-    b.hi 4f
-    add w10, w10, #10
-3:  lsl x22, x22, #4
-    add x22, x22, x10
-    add x23, x23, #1
-    cmp x23, #8
-    b.hi 82f
-    add x19, x19, #1
-    b 2b
-4:  cbz x23, 81f
-    // skip to LF (extensions)
-5:  cmp x19, x20
-    b.hs 80f
-    ldrb w9, [x19], #1
-    cmp w9, #'\n'
-    b.ne 5b
-    cbz x22, 10f
-    add x9, x19, x22
-    add x9, x9, #2
-    cmp x9, x20
-    b.hi 80f
-    ldr x10, [x21, #BUF_LEN]
-    add x10, x10, x22
-    mov x11, #MAX_BODY
-    cmp x10, x11
-    b.hi 82f
-    mov x0, x21
-    mov x1, x19
-    mov x2, x22
-    bl _buf_append
-    add x19, x19, x22
-    ldrb w9, [x19]
-    cmp w9, #'\r'
-    b.ne 81f
-    ldrb w9, [x19, #1]
-    cmp w9, #'\n'
-    b.ne 81f
-    add x19, x19, #2
-    b 1b
-10: // trailers until an empty line
-    cmp x19, x20
-    b.hs 80f
-    ldrb w9, [x19]
-    cmp w9, #'\r'
-    b.eq 12f
-11: cmp x19, x20
-    b.hs 80f
-    ldrb w9, [x19], #1
-    cmp w9, #'\n'
-    b.ne 11b
-    b 10b
-12: add x9, x19, #2
-    cmp x9, x20
-    b.hi 80f
-    mov x0, #1
-    LEAVE
-80: mov x0, #0
-    LEAVE
-81: mov x0, #-1
-    LEAVE
-82: mov x0, #-2
-    LEAVE
-
-// write_all(w0 = fd, x1 = ptr, x2 = len).
-    .p2align 2
-write_all:
-    ENTER
-    mov w19, w0
-    mov x20, x1
-    mov x21, x2
-1:  cbz x21, 9f
-    mov w0, w19
-    mov x1, x20
-    mov x2, x21
-    bl _write
-    cmp x0, #0
-    b.gt 2f
-    bl ___error
-    ldr w9, [x0]
-    cmp w9, #4
-    b.eq 1b
-    b 9f
-2:  add x20, x20, x0
-    sub x21, x21, x0
-    b 1b
-9:  LEAVE
 
     .section __TEXT,__cstring
 Lenv_bind:    .asciz "ONLYBLOCKS_BIND"
