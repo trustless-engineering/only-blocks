@@ -141,6 +141,7 @@ contains
           'Connection: close' // achar(13) // achar(10) // achar(13) // achar(10)
     ok = send_all_chars(fd, hdr, len(hdr, kind=int64))
     if (ok) ok = send_all_chars(fd, response%s, response%n)
+    call sb_release(response, 33554432_int64)
   end subroutine handle_connection
 
 end module ob_server

@@ -18,10 +18,10 @@ module ob_rpc
   integer(int64), parameter :: SLOTS_PER_EPOCH = 432000_int64
   integer(int64), parameter :: MAX_SLICE = 134217728_int64
   integer, parameter :: MAX_BATCH = 100
+  integer(int64), parameter :: KEEP_BYTES = 33554432_int64
 
   type(lru_t), save :: range_cache, hash_cache
   type(jdoc_t), save :: doc
-  type(sb_t), save :: res
   ! decode buffers reused across requests
   type(bytes_t), save :: slice, pslice, rbuf, txb, mframe, pl, rframe, rpl
   type(car_t), save :: car, pcar
@@ -175,7 +175,7 @@ contains
     integer, intent(in) :: pa
     type(sb_t), intent(inout) :: out
     integer :: n, p0, p1, m, code
-    integer(int64) :: slot, v
+    integer(int64) :: slot, v, mark
     logical :: ok
     type(opts_t) :: o
     character(len=:), allocatable :: s, msg
@@ -291,18 +291,35 @@ contains
       call put_error(out, -32602, 'Invalid params: transactionDetails "accounts" requires encoding "json"', idtext)
       return
     end if
-    call get_block(slot, o, res, code, msg)
+    ! The result is written straight into the response; on failure roll back to `mark`.
+    mark = out%n
+    call sb_add(out, '{"jsonrpc":"2.0","result":')
+    call get_block(slot, o, out, code, msg)
+    call release_decode_buffers()
     if (code /= 0) then
+      out%n = mark
       if (code == -32603) write(error_unit, '(a)') 'getBlock ' // u64_str(slot) // ': ' // msg
       call put_error(out, code, msg, idtext)
       return
     end if
-    call sb_add(out, '{"jsonrpc":"2.0","result":')
-    call sb_cat(out, res)
     call sb_add(out, ',"id":')
     call sb_add(out, idtext)
     call sb_addc(out, '}')
   end subroutine handle_get_block
+
+  !> Epoch-boundary blocks need hundreds of MiB of scratch; give it back afterwards.
+  subroutine release_decode_buffers()
+    call bytes_release(slice, KEEP_BYTES)
+    call bytes_release(pslice, KEEP_BYTES)
+    call bytes_release(txb, KEEP_BYTES)
+    call bytes_release(mframe, KEEP_BYTES)
+    call bytes_release(pl, KEEP_BYTES)
+    call bytes_release(rframe, KEEP_BYTES)
+    call bytes_release(rpl, KEEP_BYTES)
+    if (allocated(rws%rw)) then
+      if (size(rws%rw) > 65536) deallocate(rws%rw)
+    end if
+  end subroutine release_decode_buffers
 
   logical function set_encoding(s, o)
     character(len=*), intent(in) :: s
@@ -435,7 +452,6 @@ contains
     integer(int64) :: v1, v2
     integer :: e, ei, ti, idx
     logical :: complete, has_meta, gate, first_tx
-    r%n = 0
     code = 0
     msg = ''
     ! 1-3: the block itself
@@ -620,7 +636,6 @@ contains
       msg = 'Transaction version (0) is not supported by the requesting client. ' // &
             'Please try the request again with the following configuration parameter: ' // &
             '"maxSupportedTransactionVersion": 0'
-      r%n = 0
       return
     end if
     call sb_add(r, ',"blockTime":')
@@ -636,13 +651,11 @@ contains
       call sb_add(r, 'null')
     end if
     call sb_addc(r, '}')
-    if (slice%n > 268435456_int64) slice%n = 0
   contains
     subroutine fail_decode(m)
       character(len=*), intent(in) :: m
       code = -32603
       msg = 'Internal error: ' // m
-      r%n = 0
     end subroutine fail_decode
   end subroutine get_block
 

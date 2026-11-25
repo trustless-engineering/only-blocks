@@ -71,6 +71,25 @@ contains
     b%n = b%n + n
   end subroutine bytes_append
 
+  !> Drop the storage of a buffer whose capacity grew beyond `keep` bytes.
+  subroutine bytes_release(b, keep)
+    type(bytes_t), intent(inout) :: b
+    integer(int64), intent(in) :: keep
+    b%n = 0
+    if (allocated(b%d)) then
+      if (size(b%d, kind=int64) > keep) deallocate(b%d)
+    end if
+  end subroutine bytes_release
+
+  subroutine sb_release(sb, keep)
+    type(sb_t), intent(inout) :: sb
+    integer(int64), intent(in) :: keep
+    sb%n = 0
+    if (allocated(sb%s)) then
+      if (len(sb%s, kind=int64) > keep) deallocate(sb%s)
+    end if
+  end subroutine sb_release
+
   subroutine bytes_push(b, v)
     type(bytes_t), intent(inout) :: b
     integer, intent(in) :: v
