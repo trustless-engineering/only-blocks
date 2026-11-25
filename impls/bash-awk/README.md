@@ -71,6 +71,11 @@ WIRE_FORMATS §9.1 falls back to the raw bytes.
 * **XXH64.** XXH64 runs on four exact 16-bit limbs, with XOR from the byte
   table.
 
+It decodes about 0.3 MB of output per second. That is plenty for ordinary
+blocks: slot `302400001` has 140 metadata frames. Every byte is still one awk
+array cell, though. The 75 MB epoch-boundary rewards of slot `302400000`
+would, by estimate (this was not run), take minutes and many gigabytes.
+
 ## Process model
 
 The server is one Bash process plus its AWK coprocess. The accept loop runs

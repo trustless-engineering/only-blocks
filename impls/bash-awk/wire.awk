@@ -152,7 +152,7 @@ function range_get(slot, epoch, suffix, first, last, want, cap,   attempt, wait,
             if (wait > 10) wait = 10
             wait = wait * (0.5 + rand() * 0.5)
         }
-        if (wait > 0) system("sleep " sprintf("%.3f", wait))
+        if (wait > 0) system("/bin/sleep " sprintf("%.3f", wait))
     }
 }
 
