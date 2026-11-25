@@ -3068,6 +3068,641 @@
           "expected_error_code": -32601
         }
       ]
+    },
+    {
+      "id": "invalid_batch_too_large",
+      "description": "Batch of 101 requests exceeds the 100-item limit",
+      "raw_body": "[{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":8,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":10,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":11,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":12,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":13,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":14,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":15,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":16,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":17,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":18,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":19,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":20,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":21,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":22,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":23,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":24,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":25,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":26,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":27,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":28,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":29,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":30,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":31,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":32,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":33,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":34,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":35,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":36,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":37,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":38,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":39,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":40,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":41,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":42,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":43,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":44,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":45,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":46,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":47,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":48,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":49,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":50,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":51,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":52,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":53,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":54,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":55,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":56,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":57,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":58,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":59,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":60,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":61,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":62,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":63,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":64,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":65,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":66,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":67,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":68,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":69,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":70,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":71,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":72,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":73,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":74,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":75,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":76,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":77,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":78,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":79,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":80,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":81,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":82,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":83,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":84,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":85,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":86,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":87,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":88,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":89,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":90,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":91,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":92,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":93,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":94,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":95,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":96,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":97,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":98,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":99,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":100,\"method\":\"getHealth\"},{\"jsonrpc\":\"2.0\",\"id\":101,\"method\":\"getHealth\"}]",
+      "expect_kind": "error",
+      "expected_id": null,
+      "expected_error_code": -32600
+    },
+    {
+      "id": "batch_invalid_items",
+      "description": "Non-object batch items answer -32600 with a null id, in order",
+      "raw_body": "[1,{\"jsonrpc\":\"2.0\",\"id\":\"batch-ok\",\"method\":\"getHealth\"},\"x\",null,[]]",
+      "expect_kind": "batch",
+      "expected_batch": [
+        {
+          "expect_kind": "error",
+          "expected_id": null,
+          "expected_error_code": -32600
+        },
+        {
+          "expect_kind": "result",
+          "expected_id": "batch-ok",
+          "expected_result": "ok"
+        },
+        {
+          "expect_kind": "error",
+          "expected_id": null,
+          "expected_error_code": -32600
+        },
+        {
+          "expect_kind": "error",
+          "expected_id": null,
+          "expected_error_code": -32600
+        },
+        {
+          "expect_kind": "error",
+          "expected_id": null,
+          "expected_error_code": -32600
+        }
+      ]
+    },
+    {
+      "id": "health_without_id",
+      "description": "A request without id still gets a response, with a null id",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"method\":\"getHealth\"}",
+      "expect_kind": "result",
+      "expected_id": null,
+      "expected_result": "ok"
+    },
+    {
+      "id": "invalid_id_object",
+      "description": "An object id is an invalid request answered with a null id",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":{},\"method\":\"getHealth\"}",
+      "expect_kind": "error",
+      "expected_id": null,
+      "expected_error_code": -32600
+    },
+    {
+      "id": "invalid_id_boolean",
+      "description": "A boolean id is an invalid request answered with a null id",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":true,\"method\":\"getHealth\"}",
+      "expect_kind": "error",
+      "expected_id": null,
+      "expected_error_code": -32600
+    },
+    {
+      "id": "invalid_method_type",
+      "description": "A non-string method is an invalid request answered with a null id",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":41,\"method\":5}",
+      "expect_kind": "error",
+      "expected_id": null,
+      "expected_error_code": -32600
+    },
+    {
+      "id": "invalid_jsonrpc_type",
+      "description": "A non-string jsonrpc is an invalid request answered with a null id",
+      "raw_body": "{\"jsonrpc\":2.0,\"id\":42,\"method\":\"getHealth\"}",
+      "expect_kind": "error",
+      "expected_id": null,
+      "expected_error_code": -32600
+    },
+    {
+      "id": "invalid_missing_method",
+      "description": "A missing method echoes the id",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":43}",
+      "expect_kind": "error",
+      "expected_id": 43,
+      "expected_error_code": -32600
+    },
+    {
+      "id": "invalid_missing_jsonrpc",
+      "description": "A missing jsonrpc member echoes the id",
+      "raw_body": "{\"id\":44,\"method\":\"getHealth\"}",
+      "expect_kind": "error",
+      "expected_id": 44,
+      "expected_error_code": -32600
+    },
+    {
+      "id": "malformed_trailing_garbage",
+      "description": "Bytes after the JSON value are a parse error",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":45,\"method\":\"getHealth\"} x",
+      "expect_kind": "error",
+      "expected_id": null,
+      "expected_error_code": -32700
+    },
+    {
+      "id": "malformed_empty_body",
+      "description": "An empty body is a parse error",
+      "raw_body": "",
+      "expect_kind": "error",
+      "expected_id": null,
+      "expected_error_code": -32700
+    },
+    {
+      "id": "method_case_sensitive",
+      "description": "Method names are case-sensitive",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":46,\"method\":\"gethealth\"}",
+      "expect_kind": "error",
+      "expected_id": 46,
+      "expected_error_code": -32601
+    },
+    {
+      "id": "invalid_health_params_object",
+      "description": "getHealth rejects an object as params",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":47,\"method\":\"getHealth\",\"params\":{}}",
+      "expect_kind": "error",
+      "expected_id": 47,
+      "expected_error_code": -32602
+    },
+    {
+      "id": "invalid_block_missing_params",
+      "description": "getBlock without params",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":48,\"method\":\"getBlock\"}",
+      "expect_kind": "error",
+      "expected_id": 48,
+      "expected_error_code": -32602
+    },
+    {
+      "id": "invalid_block_params_object",
+      "description": "getBlock params must be an array",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":49,\"method\":\"getBlock\",\"params\":{\"slot\":302400011}}",
+      "expect_kind": "error",
+      "expected_id": 49,
+      "expected_error_code": -32602
+    },
+    {
+      "id": "invalid_block_three_params",
+      "description": "getBlock accepts at most two params",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":50,\"method\":\"getBlock\",\"params\":[302400011,null,null]}",
+      "expect_kind": "error",
+      "expected_id": 50,
+      "expected_error_code": -32602
+    },
+    {
+      "id": "invalid_slot_fraction",
+      "description": "A slot written 1.0 is not an integer literal",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":51,\"method\":\"getBlock\",\"params\":[1.0]}",
+      "expect_kind": "error",
+      "expected_id": 51,
+      "expected_error_code": -32602
+    },
+    {
+      "id": "invalid_slot_exponent",
+      "description": "A slot written 1e3 is not an integer literal",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":52,\"method\":\"getBlock\",\"params\":[1e3]}",
+      "expect_kind": "error",
+      "expected_id": 52,
+      "expected_error_code": -32602
+    },
+    {
+      "id": "invalid_slot_overflow",
+      "description": "2^64 does not fit a u64 slot",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":53,\"method\":\"getBlock\",\"params\":[18446744073709551616]}",
+      "expect_kind": "error",
+      "expected_id": 53,
+      "expected_error_code": -32602
+    },
+    {
+      "id": "invalid_slot_boolean",
+      "description": "A boolean slot",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":54,\"method\":\"getBlock\",\"params\":[true]}",
+      "expect_kind": "error",
+      "expected_id": 54,
+      "expected_error_code": -32602
+    },
+    {
+      "id": "invalid_slot_null",
+      "description": "A null slot",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":55,\"method\":\"getBlock\",\"params\":[null]}",
+      "expect_kind": "error",
+      "expected_id": 55,
+      "expected_error_code": -32602
+    },
+    {
+      "id": "slot_u64_max_unarchived",
+      "description": "2^64-1 is a valid slot in the unarchived epoch 42700796466920",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":56,\"method\":\"getBlock\",\"params\":[18446744073709551615]}",
+      "expect_kind": "error",
+      "expected_id": 56,
+      "expected_error_code": -32004
+    },
+    {
+      "id": "slot_i64_overflow_unarchived",
+      "description": "2^63 is a valid slot above the signed 64-bit range",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":57,\"method\":\"getBlock\",\"params\":[9223372036854775808]}",
+      "expect_kind": "error",
+      "expected_id": 57,
+      "expected_error_code": -32004
+    },
+    {
+      "id": "invalid_config_number",
+      "description": "The second param must be null, a string or an object",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":58,\"method\":\"getBlock\",\"params\":[302400011,5]}",
+      "expect_kind": "error",
+      "expected_id": 58,
+      "expected_error_code": -32602
+    },
+    {
+      "id": "invalid_config_array",
+      "description": "An array is not a config object",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":59,\"method\":\"getBlock\",\"params\":[302400011,[]]}",
+      "expect_kind": "error",
+      "expected_id": 59,
+      "expected_error_code": -32602
+    },
+    {
+      "id": "invalid_encoding_binary",
+      "description": "The legacy binary encoding is not supported",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":60,\"method\":\"getBlock\",\"params\":[302400011,{\"encoding\":\"binary\"}]}",
+      "expect_kind": "error",
+      "expected_id": 60,
+      "expected_error_code": -32602
+    },
+    {
+      "id": "invalid_encoding_type",
+      "description": "A non-string encoding",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":61,\"method\":\"getBlock\",\"params\":[302400011,{\"encoding\":5}]}",
+      "expect_kind": "error",
+      "expected_id": 61,
+      "expected_error_code": -32602
+    },
+    {
+      "id": "invalid_transaction_details",
+      "description": "Unknown transactionDetails value",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":62,\"method\":\"getBlock\",\"params\":[302400011,{\"transactionDetails\":\"Full\"}]}",
+      "expect_kind": "error",
+      "expected_id": 62,
+      "expected_error_code": -32602
+    },
+    {
+      "id": "invalid_rewards_type",
+      "description": "rewards must be a boolean",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":63,\"method\":\"getBlock\",\"params\":[302400011,{\"rewards\":\"true\"}]}",
+      "expect_kind": "error",
+      "expected_id": 63,
+      "expected_error_code": -32602
+    },
+    {
+      "id": "invalid_max_version_256",
+      "description": "maxSupportedTransactionVersion above 255",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":64,\"method\":\"getBlock\",\"params\":[302400011,{\"maxSupportedTransactionVersion\":256}]}",
+      "expect_kind": "error",
+      "expected_id": 64,
+      "expected_error_code": -32602
+    },
+    {
+      "id": "invalid_max_version_negative",
+      "description": "Negative maxSupportedTransactionVersion",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":65,\"method\":\"getBlock\",\"params\":[302400011,{\"maxSupportedTransactionVersion\":-1}]}",
+      "expect_kind": "error",
+      "expected_id": 65,
+      "expected_error_code": -32602
+    },
+    {
+      "id": "invalid_max_version_fraction",
+      "description": "maxSupportedTransactionVersion written 0.0",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":66,\"method\":\"getBlock\",\"params\":[302400011,{\"maxSupportedTransactionVersion\":0.0}]}",
+      "expect_kind": "error",
+      "expected_id": 66,
+      "expected_error_code": -32602
+    },
+    {
+      "id": "invalid_max_version_string",
+      "description": "maxSupportedTransactionVersion as a string",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":67,\"method\":\"getBlock\",\"params\":[302400011,{\"maxSupportedTransactionVersion\":\"0\"}]}",
+      "expect_kind": "error",
+      "expected_id": 67,
+      "expected_error_code": -32602
+    },
+    {
+      "id": "invalid_commitment_unknown",
+      "description": "Unknown commitment string",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":68,\"method\":\"getBlock\",\"params\":[302400011,{\"commitment\":\"recent\"}]}",
+      "expect_kind": "error",
+      "expected_id": 68,
+      "expected_error_code": -32602
+    },
+    {
+      "id": "invalid_commitment_type",
+      "description": "A non-string commitment",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":69,\"method\":\"getBlock\",\"params\":[302400011,{\"commitment\":1}]}",
+      "expect_kind": "error",
+      "expected_id": 69,
+      "expected_error_code": -32602
+    },
+    {
+      "id": "invalid_parsed_accounts",
+      "description": "accounts detail is only valid with the json encoding",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":70,\"method\":\"getBlock\",\"params\":[302400011,{\"encoding\":\"jsonParsed\",\"transactionDetails\":\"accounts\",\"maxSupportedTransactionVersion\":0}]}",
+      "expect_kind": "error",
+      "expected_id": 70,
+      "expected_error_code": -32602
+    },
+    {
+      "id": "invalid_params_before_network",
+      "description": "Invalid params on a skipped slot are still -32602",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":71,\"method\":\"getBlock\",\"params\":[302400004,\"bogusEnc\"]}",
+      "expect_kind": "error",
+      "expected_id": 71,
+      "expected_error_code": -32602
+    },
+    {
+      "id": "config_nulls_and_unknown_keys",
+      "description": "Null config values mean defaults and unknown keys are ignored",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":72,\"method\":\"getBlock\",\"params\":[302400010,{\"encoding\":\"base64\",\"transactionDetails\":null,\"rewards\":null,\"maxSupportedTransactionVersion\":null,\"commitment\":null,\"futureOption\":{\"nested\":[1,2.5,\"x\"]}}]}",
+      "expect_kind": "result",
+      "expected_id": 72,
+      "expected_result": {
+        "blockHeight": 302399910,
+        "blockTime": 1902400010,
+        "blockhash": "3mg7sM6RFEBHiiFotFNfvteH1WdFcc9cujKuPaqZdfDz",
+        "numRewardPartitions": 4,
+        "parentSlot": 302400009,
+        "previousBlockhash": "3hkpj3dQevt4ad1JSx3ke1sWmMR3wYToMKfFLCnxtKuH",
+        "rewards": [
+          {
+            "commission": null,
+            "lamports": 2500,
+            "postBalance": 52500,
+            "pubkey": "US517G5965aydkZ46HS38QLi7UQiSojurfbQfKCELFx",
+            "rewardType": "Fee"
+          },
+          {
+            "commission": null,
+            "lamports": 1234,
+            "postBalance": 51234,
+            "pubkey": "YMN9Qj5jPNp7j14VPcML1B6xGgcPWVZUGLFU3Mnyfaf",
+            "rewardType": "Staking"
+          },
+          {
+            "commission": 7,
+            "lamports": 321,
+            "postBalance": 50321,
+            "pubkey": "cGfHiC6Kgg3FpFZvgwGcswsCRtp4aBP2fzuXRQPizuN",
+            "rewardType": "Voting"
+          }
+        ],
+        "transactions": [
+          {
+            "meta": {
+              "computeUnitsConsumed": 300,
+              "costUnits": 600,
+              "err": null,
+              "fee": 5000,
+              "innerInstructions": [
+                {
+                  "index": 0,
+                  "instructions": [
+                    {
+                      "accounts": [
+                        1
+                      ],
+                      "data": "1bM",
+                      "programIdIndex": 2,
+                      "stackHeight": 2
+                    }
+                  ]
+                }
+              ],
+              "loadedAddresses": {
+                "readonly": [],
+                "writable": []
+              },
+              "logMessages": [
+                "Program LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY invoke [1]",
+                "Program log: golden fixture",
+                "Program LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY success"
+              ],
+              "postBalances": [
+                44000,
+                11000,
+                1
+              ],
+              "postTokenBalances": [
+                {
+                  "accountIndex": 1,
+                  "mint": "swqrv48gsrwpBFbftEwnP2vB4jckpvfGJfXkwaniLCC",
+                  "owner": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+                  "programId": "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY",
+                  "uiTokenAmount": {
+                    "amount": "5",
+                    "decimals": 6,
+                    "uiAmount": 5e-06,
+                    "uiAmountString": "0.000005"
+                  }
+                }
+              ],
+              "preBalances": [
+                50000,
+                10000,
+                1
+              ],
+              "preTokenBalances": [
+                {
+                  "accountIndex": 1,
+                  "mint": "swqrv48gsrwpBFbftEwnP2vB4jckpvfGJfXkwaniLCC",
+                  "owner": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+                  "programId": "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY",
+                  "uiTokenAmount": {
+                    "amount": "1250000",
+                    "decimals": 6,
+                    "uiAmount": 1.25,
+                    "uiAmountString": "1.25"
+                  }
+                }
+              ],
+              "returnData": {
+                "data": [
+                  "AP8BKg==",
+                  "base64"
+                ],
+                "programId": "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY"
+              },
+              "rewards": [],
+              "status": {
+                "Ok": null
+              }
+            },
+            "transaction": [
+              "AT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0BAAEDAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQECAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgBAgIAAQQAASr/",
+              "base64"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "bincode_null_config",
+      "description": "A null second param means all defaults",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":73,\"method\":\"getBlock\",\"params\":[43200001,null]}",
+      "expect_kind": "result",
+      "expected_id": 73,
+      "expected_result": {
+        "blockHeight": 43199901,
+        "blockTime": 1643200001,
+        "blockhash": "36VASLSKLFD2KokjXG7V28veZvXEsyHRKefLonPaAKzv",
+        "parentSlot": 43200000,
+        "previousBlockhash": "32ZsJ2yJjwuoBiWE5xnZjG9tKmK3CubbmEzgkQLyQzgD",
+        "rewards": [
+          {
+            "commission": null,
+            "lamports": 2500,
+            "postBalance": 50000,
+            "pubkey": "US517G5965aydkZ46HS38QLi7UQiSojurfbQfKCELFx",
+            "rewardType": "Fee"
+          }
+        ],
+        "transactions": [
+          {
+            "meta": {
+              "computeUnitsConsumed": 150,
+              "err": null,
+              "fee": 5000,
+              "innerInstructions": null,
+              "loadedAddresses": {
+                "readonly": [],
+                "writable": []
+              },
+              "logMessages": [
+                "Program LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY success"
+              ],
+              "postBalances": [
+                44000,
+                11000,
+                1
+              ],
+              "postTokenBalances": [
+                {
+                  "accountIndex": 1,
+                  "mint": "swqrv48gsrwpBFbftEwnP2vB4jckpvfGJfXkwaniLCC",
+                  "owner": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+                  "programId": "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY",
+                  "uiTokenAmount": {
+                    "amount": "1250000",
+                    "decimals": 6,
+                    "uiAmount": 1.25,
+                    "uiAmountString": "1.25"
+                  }
+                }
+              ],
+              "preBalances": [
+                50000,
+                10000,
+                1
+              ],
+              "preTokenBalances": [
+                {
+                  "accountIndex": 1,
+                  "mint": "swqrv48gsrwpBFbftEwnP2vB4jckpvfGJfXkwaniLCC",
+                  "owner": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+                  "programId": "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY",
+                  "uiTokenAmount": {
+                    "amount": "1000000",
+                    "decimals": 6,
+                    "uiAmount": 1.0,
+                    "uiAmountString": "1"
+                  }
+                }
+              ],
+              "rewards": [],
+              "status": {
+                "Ok": null
+              }
+            },
+            "transaction": {
+              "message": {
+                "accountKeys": [
+                  "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+                  "8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR",
+                  "LbUiWL3xVV8hTFYBVdbTNrpDo41NKS6o3LHHuDzjfcY"
+                ],
+                "header": {
+                  "numReadonlySignedAccounts": 0,
+                  "numReadonlyUnsignedAccounts": 1,
+                  "numRequiredSignatures": 1
+                },
+                "instructions": [
+                  {
+                    "accounts": [
+                      0,
+                      1
+                    ],
+                    "data": "1Pki",
+                    "programIdIndex": 2,
+                    "stackHeight": 1
+                  }
+                ],
+                "recentBlockhash": "32ZsJ2yJjwuoBiWE5xnZjG9tKmK3CubbmEzgkQLyQzgD"
+              },
+              "signatures": [
+                "22NZnfeBVDSeqE4euuTyVt2KxUidYAHUAGLLTKU8gY2hm4twGud2FCwtboXvxD8AJEMdkYBSESbmhCkCK51dpyMt"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "max_version_255",
+      "description": "Any maxSupportedTransactionVersion in 0..255 admits v0 transactions",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":74,\"method\":\"getBlock\",\"params\":[302400011,{\"maxSupportedTransactionVersion\":255,\"transactionDetails\":\"none\"}]}",
+      "expect_kind": "result",
+      "expected_id": 74,
+      "expected_result": {
+        "blockHeight": 302399911,
+        "blockTime": 1902400011,
+        "blockhash": "3qbR1eZRqXUWroWKKYhbDmR3FfqTHfqSU8zZSxtANzYh",
+        "numRewardPartitions": 4,
+        "parentSlot": 302400010,
+        "previousBlockhash": "3mg7sM6RFEBHiiFotFNfvteH1WdFcc9cujKuPaqZdfDz",
+        "rewards": [
+          {
+            "commission": null,
+            "lamports": 2500,
+            "postBalance": 52500,
+            "pubkey": "US517G5965aydkZ46HS38QLi7UQiSojurfbQfKCELFx",
+            "rewardType": "Fee"
+          },
+          {
+            "commission": null,
+            "lamports": 1234,
+            "postBalance": 51234,
+            "pubkey": "YMN9Qj5jPNp7j14VPcML1B6xGgcPWVZUGLFU3Mnyfaf",
+            "rewardType": "Staking"
+          },
+          {
+            "commission": 7,
+            "lamports": 321,
+            "postBalance": 50321,
+            "pubkey": "cGfHiC6Kgg3FpFZvgwGcswsCRtp4aBP2fzuXRQPizuN",
+            "rewardType": "Voting"
+          }
+        ]
+      }
+    },
+    {
+      "id": "unsupported_version_accounts",
+      "description": "The -32015 gate also applies to accounts detail",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":75,\"method\":\"getBlock\",\"params\":[302400011,{\"transactionDetails\":\"accounts\"}]}",
+      "expect_kind": "error",
+      "expected_id": 75,
+      "expected_error_code": -32015
+    },
+    {
+      "id": "unlisted_slot_skipped",
+      "description": "A zero-filled slot-range record is a skipped slot",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":76,\"method\":\"getBlock\",\"params\":[302400005]}",
+      "expect_kind": "error",
+      "expected_id": 76,
+      "expected_error_code": -32007
+    },
+    {
+      "id": "parent_skipped",
+      "description": "Slot 302400009 exists but its parent 302400008 is skipped",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":77,\"method\":\"getBlock\",\"params\":[302400009]}",
+      "expect_kind": "error",
+      "expected_id": 77,
+      "expected_error_code": -32007
+    },
+    {
+      "id": "parent_unarchived",
+      "description": "Slot 43200000 exists but its parent 43199999 is in the unarchived epoch 99",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":78,\"method\":\"getBlock\",\"params\":[43200000]}",
+      "expect_kind": "error",
+      "expected_id": 78,
+      "expected_error_code": -32004
+    },
+    {
+      "id": "parent_unarchived_none",
+      "description": "previousBlockhash is resolved even when nothing else is decoded",
+      "raw_body": "{\"jsonrpc\":\"2.0\",\"id\":79,\"method\":\"getBlock\",\"params\":[43200000,{\"transactionDetails\":\"none\",\"rewards\":false}]}",
+      "expect_kind": "error",
+      "expected_id": 79,
+      "expected_error_code": -32004
     }
   ]
 }

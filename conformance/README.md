@@ -44,15 +44,28 @@ The runner checks that `getTransaction` returns `-32601` with zero mock
 requests. Separate fresh processes verify a cold slot-range read followed by
 a warm hit with zero range-table reads, and recovery from an injected HTTP
 429. CAR reads on warm requests are allowed. The cache check covers immediate
-reuse. The disk check samples files and symlinks retained under `TMPDIR` at
+reuse. A fourth fresh process receives hostile input over a bare socket: a
+body of 1 MiB + 1 byte must be answered with HTTP 413 or a dropped connection
+(never 200), 1 MiB of nested JSON arrays must be answered with `-32700` or
+`-32600`, and `getHealth` must still answer afterwards with zero mock
+requests. The disk check samples files and symlinks retained under `TMPDIR` at
 startup, between requests and after shutdown. The process exits 0 when every
 selected implementation passes and 1 when any check fails.
 
 `--live` additionally runs sequential probes against
 `https://files.old-faithful.net` with a one-second pause before each block
-request. It checks the modern v0 slot 302400001, skipped slot 302400004, legacy
-slot 43200000, and the removed RPC method. Omitting `--live` keeps the harness
-on loopback.
+request and a 120-second timeout per request. It checks the modern v0 slot
+302400001, skipped slot 302400004 (`-32007`), pre-157 bincode slot 43200000,
+and the removed RPC method. Mainnet history is immutable, so both blocks are
+compared with facts pinned in `LIVE_BLOCKS`: `blockhash`,
+`previousBlockhash`, `parentSlot`, `blockTime`, `blockHeight`, the block
+`rewards`, the transaction count, the fee total, the number of v0 and failed
+transactions, and the first and last signatures. The `signatures` detail
+level must list the same first signatures as `json`, and the `base64` and
+`base58` encodings must carry the same metadata, the same versions and wire
+bytes that start with those signatures (and equal each other). The Rust and
+Node.js implementations and a public mainnet RPC node agree on every pinned
+value. Omitting `--live` keeps the harness on loopback.
 
 ## Benchmark output
 

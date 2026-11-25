@@ -5,11 +5,16 @@ Status: **normative**. This document plus [`SPEC.md`](../SPEC.md) and
 Old Faithful bytes into a byte-for-byte compatible `getBlock` JSON result. You
 do not need to read any Rust crate or Solana repository.
 
-The behaviour described here is the behaviour of the Rust reference
-implementation (`src/decoder.rs`, `src/proto.rs` and `src/rpc/`, which move
-to `impls/rust/src/` after the rebrand), including its
-use of `solana-transaction-status 3.1.14`, `serde_cbor 0.11`, `cid 0.11`,
-`bincode 1.3` and `prost 0.14`. Wherever the reference is lenient (ignores
+The behaviour described here is the behaviour of the original crate-based
+Rust reference oracle (the server that generated `conformance/fixtures/`),
+including its use of `solana-transaction-status 3.1.14`, `serde_cbor 0.11`,
+`cid 0.11`, `bincode 1.3` and `prost 0.14`. That oracle is no longer in the
+tree. Its zero-crate successor `impls/rust/` and the independent
+`impls/javascript-node/` both implement this document. They agree with each
+other on every golden fixture and return identical JSON values for mainnet
+slots `302400001` and `43200000`, so "the reference" below always means the
+behaviour, not a file you need to read.
+Wherever the reference is lenient (ignores
 a field, defaults a value, falls back to another layout), this document says
 so explicitly, because conformance fixtures depend on those exact choices. The
 one deliberate OnlyBlocks deviation (`jsonParsed` instructions) is called out
@@ -352,7 +357,8 @@ Given requested slot `S` and its CAR slice:
 2. **blockhash** = the `hash` of the Entry referenced by the **last** link in
    `block.entries` (missing CID → Error). If `entries` is empty, it is 32 zero
    bytes (Base58 `11111111111111111111111111111111`).
-3. **previousBlockhash** is resolved by the server (`SPEC.md` §4.3).
+3. **previousBlockhash** is resolved by the server (`SPEC.md` §4.5), before
+   any transaction or reward is decoded.
 4. **Transactions** (only when `transactionDetails` ≠ `"none"`). For each
    entry link in order (missing → Error), parse the Entry. For each
    transaction link in order (missing → Error), parse the Transaction node:

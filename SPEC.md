@@ -13,11 +13,14 @@ executable RFC 8878 decoder blueprint), it is everything an implementer needs.
 You never need to read a Rust crate or a Solana repository.
 
 The key words **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT** and **MAY**
-are used as in RFC 2119. The reference behaviour is the Rust implementation in
-this repository (`src/` in the pre-rebrand tree, `impls/rust/src/` after the
-rebrand). It is the crate-based oracle that produced
-`conformance/fixtures/`. Where OnlyBlocks intentionally differs from it,
-§10 says so.
+are used as in RFC 2119. The **reference behaviour** is that of the original
+crate-based Rust server (axum, tokio, reqwest, `solana-transaction-status`, …),
+the oracle that produced `conformance/fixtures/`. That oracle is no longer in
+the tree: `impls/rust/` is now a zero-crate, pure-`std` port that reproduces
+it, and `impls/javascript-node/` is a second, independent zero-dependency
+implementation. Both are bound by every rule below, and either can be used
+as a behavioural cross-check. Where OnlyBlocks intentionally
+differs from the original oracle, §10 says so.
 
 ---
 
@@ -58,8 +61,9 @@ SPEC.md, docs/             this contract
   `/opt/homebrew/bin`.
 * It MAY write build artefacts under `impls/<slug>/` (for example
   `impls/<slug>/target/`). Those must be git-ignored. It MUST NOT download
-  anything (no package managers, no `curl | sh`). The one temporary exception
-  is the crate-based Rust reference oracle (§3.2).
+  anything (no package managers, no `curl | sh`). There are no exceptions:
+  `impls/rust/build.sh` runs `cargo build --offline` with an empty
+  `[dependencies]` table.
 * It must be idempotent: running it twice is harmless.
 
 ### 2.3 `run.sh` (required)
@@ -127,6 +131,19 @@ SPEC.md, docs/             this contract
   zstd (if built in, e.g. Python ≥ 3.14 `compression.zstd` or recent Node.js
   `zlib.zstdDecompressSync`). A stdlib zstd decoder MUST still enforce the
   512 MiB output limit and must accept concatenated and skippable frames.
+
+  **Do not assume a one-shot stdlib call does that.** Node's
+  `zstdDecompressSync` (observed on Node 25), for example, stops after the
+  first frame (so
+  concatenated frames lose data and a leading skippable frame yields empty
+  output), silently ignores trailing garbage, and returns partial output for a
+  truncated frame instead of failing. If your stdlib decoder behaves like
+  that, walk the frame boundaries yourself (`ZSTD_MINI_SPEC.md` §7: magic,
+  frame header, the 3-byte block headers up to `Last_Block`, the optional
+  4-byte checksum, and skippable frames) and hand the decoder exactly one
+  complete frame at a time, summing the outputs against the 512 MiB limit.
+  Truncated or malformed input must be a zstd *failure* (`WIRE_FORMATS.md`
+  §9.1 then falls back to the raw bytes), never a short success.
 * The **compiler/interpreter and the OS**: syscalls, libc, POSIX shell
   utilities needed to launch (`bash`, `exec`).
 
@@ -153,13 +170,10 @@ SPEC.md, docs/             this contract
   | Zstandard decoder (unless in stdlib) | `docs/ZSTD_MINI_SPEC.md` |
   | Bounded LRU caches | §4.4 |
 
-* **Reference-oracle exemption.** The existing Rust implementation
-  (`impls/rust/` after the rebrand, `src/` before) is **crate-based**
-  (axum, tokio, reqwest, clap, `solana-transaction-status`, …). It is the
-  reference oracle that generated the golden fixtures. It is exempt from this
-  section, and from §2.2's no-download rule, until it is replaced by a
-  0-crate Rust port. Every other implementation, including any future
-  0-crate Rust port, is fully bound by §3.
+* **No exemptions.** The crate-based Rust oracle that generated the golden
+  fixtures has been replaced by the zero-crate `impls/rust/` (`cargo tree`
+  prints one line). Every implementation in `impls/`, Rust included, is fully
+  bound by §3.
 
 ### 3.3 TLS / HTTPS transport exception
 
@@ -304,6 +318,14 @@ MAY add a bounded RAM slice cache.
      unarchived one `-32004`). Index it, take the hash of its last `Entry`
      (32 zero bytes if it has no entries), Base58-encode it, and cache it. The
      parent's `Block.slot` is **not** checked against `parent_slot`.
+
+   This step runs for **every** `getBlock`, whatever `transactionDetails` and
+   `rewards` say, and it runs **before** step 5. A parent error therefore wins
+   over a `-32015` or a decode error in the block's own transactions or
+   rewards. Golden cases pin
+   it: fixture slot `43200000` has parent `43199999` in the unarchived epoch 99,
+   so it answers `-32004` even with `transactionDetails:"none"`; fixture slot
+   `302400009` has the skipped parent `302400008`, so it answers `-32007`.
 5. Decode transactions, metadata and rewards as `transactionDetails` /
    `rewards` require, then serialize (`WIRE_FORMATS.md` §13). A `v0`
    transaction without `maxSupportedTransactionVersion` is `-32015`. Any decode
@@ -321,7 +343,7 @@ MAY add a bounded RAM slice cache.
 | a JSON value other than an object or array | `-32600`, `id: null` |
 | `[]` (empty batch) | single object `-32600`, `id: null` |
 | array with more than **100** items | single object `-32600`, `id: null` |
-| object with `jsonrpc`/`method` present but not a string | `-32600`, `id: null` |
+| object with `jsonrpc`/`method` present but neither a string nor `null` | `-32600`, `id: null` |
 | object whose `id` is present but is not a string, number or `null` | `-32600`, `id: null` |
 | `jsonrpc` absent or not exactly `"2.0"` | `-32600`, echoing `id` |
 | `method` absent | `-32600`, echoing `id` |
@@ -329,6 +351,23 @@ MAY add a bounded RAM slice cache.
 
 * An absent `id` is treated as `null`. Requests without `id`
   ("notifications") **still get a response** (with `"id": null`).
+* The checks apply **in table order**: a wrongly typed `jsonrpc`/`method`,
+  then a wrongly typed `id` (both answer with `id: null`), and only then the
+  `jsonrpc` value and the presence of `method` (which echo the `id`).
+* An explicit `null` for `jsonrpc` or `method` SHOULD be treated as *absent*
+  (the reference does: `{"jsonrpc":null,"id":5,"method":"getHealth"}` is
+  `-32600` echoing `"id": 5`). The harness does not test this.
+* A valid `id` is echoed back unchanged. Numeric ids SHOULD be echoed with
+  their original text (`7` stays `7`, not `7.0`), and a string id is never
+  turned into a number or the reverse.
+* Duplicate keys in one object: the last occurrence SHOULD win (the reference
+  does this; not tested).
+* **Nesting depth.** An implementation MAY answer `-32700` for a body nested
+  deeper than 128 levels (the reference does). It MUST NOT crash or overflow
+  its stack on a 1 MiB body of nested arrays: use an explicit depth limit or
+  an iterative parser. The harness sends 524 288 `[` followed by 524 288 `]`
+  and accepts `-32700`, or `-32600` (the body is a one-item batch whose item
+  is not an object).
 * **Batches** (1–100 items) are processed **sequentially in order**. The
   response is an array with one response per item, in the same order. A
   non-object item yields `-32600` with `id: null` in its slot.
@@ -357,7 +396,13 @@ object, `[]`, 3+ items) is `-32602`.
 
 * `params[0]` (slot): a JSON **integer literal** in `0..2^64-1`. Strings,
   negatives, fractions, exponents (`1e3`, `1.0`), booleans and out-of-range
-  values are `-32602`.
+  values are `-32602`. Validate the **source text** of the number
+  (`0|[1-9][0-9]*`), not a parsed double: `1.0` and `1e3` are rejected even
+  though they are integral, and `18446744073709551615` (`2^64-1`) is a valid
+  slot. It lies in epoch `42700796466920`, which the mock origin answers with
+  `404`, so the result is `-32004`, while `18446744073709551616` is `-32602`. Languages whose
+  JSON library yields doubles (JavaScript, Lua, AWK, …) or signed 64-bit
+  integers (Java, Tcl, …) need care here.
 * `params[1]`, optional:
   * `null`: all defaults;
   * a string: the encoding (shorthand `[slot, "base64"]`);
@@ -472,9 +517,12 @@ launches `run.sh` per §2.3 and checks:
 1. **Golden cases** (`conformance/fixtures/manifest.json`): `getHealth`
    variants, `getBlock` in every encoding and `transactionDetails` mode,
    rewards on/off, both commitments, multi-frame DataFrames, pre-157 bincode,
-   envelope and param errors, skipped/unarchived slots, the `-32015` gate and
-   mixed batches. Every response must be HTTP `200`. Results are compared
-   field by field:
+   every envelope rule of §5.1 (oversize batches, non-object batch items,
+   missing and wrongly typed `id`/`method`/`jsonrpc`), every parameter rule of
+   §5.4 (non-literal, out-of-range and `2^64-1` slots, wrongly typed options,
+   null and unknown config keys), skipped/unarchived slots, skipped and
+   unarchived **parents** (§4.5), the `-32015` gate and mixed batches. Every
+   response must be HTTP `200`. Results are compared field by field:
    * error cases are matched on `code` plus a non-empty `message`;
    * `uiAmount` allows a `1e-9` absolute tolerance;
    * `null` and omission are interchangeable **only** for optional metadata
@@ -492,8 +540,20 @@ launches `run.sh` per §2.3 and checks:
    start-up, between requests or after shutdown.
 6. `--bench` also records cold/warm latency, p50/p95, peak RSS, build time,
    lines of code and artefact size.
-7. `--live` probes the real archive: slot `302400001` (modern, v0), skipped
-   slot `302400004`, legacy slot `43200000` and the removed method.
+7. **Hostile input**: a body of 1 MiB + 1 byte must not get an HTTP `200`
+   (`413`, or the connection is dropped), a 1 MiB body of nested arrays must
+   get `-32700` or `-32600`, and the server must still answer `getHealth`
+   afterwards (§2.4, §5.1, §6).
+8. `--live` probes the real archive: slot `302400001` (modern, v0; `json`,
+   `base64`, `base58` and `signatures`), skipped slot `302400004`, legacy
+   pre-157 slot `43200000` and the removed method. Mainnet history is
+   immutable, so the probe compares `blockhash`, `previousBlockhash`,
+   `parentSlot`, `blockTime`, `blockHeight`, the transaction count, the fee
+   total, the number of `v0` and failed transactions, the first and last
+   signatures and the block rewards against values pinned in `runner.py`, and
+   checks that the four encodings describe the same transactions. Rust, Node.js and a public mainnet
+   RPC node agree on all of them. A cold live `getBlock` is four sequential
+   HTTPS Range reads, so each live request is given 120 s.
 
 An implementation is **conformant** when `runner.py --impl <slug>` exits `0`.
 
@@ -523,10 +583,9 @@ An implementation is **conformant** when `runner.py --impl <slug>` exits `0`.
 
 ### 10.1 Intentional OnlyBlocks deviations from the Rust reference
 
-1. **`getTransaction` is dropped.** The pre-rebrand Rust reference
-   implemented a slot-hinted `getTransaction`. OnlyBlocks returns `-32601`
-   for it with no network traffic (§5.3). The rebranded `impls/rust` already
-   does this.
+1. **`getTransaction` is dropped.** The original Rust oracle implemented a
+   slot-hinted `getTransaction`. OnlyBlocks returns `-32601` for it with no
+   network traffic (§5.3). `impls/rust` and `impls/javascript-node` both do.
 2. **`jsonParsed` is "partially decoded only".** The reference (via
    `solana-transaction-status`) parses instructions of well-known programs
    (System, Vote, Stake, SPL Token/Token-2022, ATA, Memo, BPF loaders, Address
@@ -534,10 +593,10 @@ An implementation is **conformant** when `runner.py --impl <slug>` exits `0`.
    level and inner, as `{"programId","accounts","data","stackHeight"}`
    (`WIRE_FORMATS.md` §13.5). The harness tolerates the difference for
    top-level instructions only, and golden fixtures use custom programs.
-3. The bind environment variable is `ONLYBLOCKS_BIND`. The old Rust CLI used
-   `INSTANT_RPC_BIND`.
+3. The bind environment variable is `ONLYBLOCKS_BIND`. The pre-rebrand name is
+   not accepted.
 
-### 10.2 Corrections to the original task brief (verified against `src/` and the golden fixtures)
+### 10.2 Corrections to the original task brief (verified against the original oracle and the golden fixtures)
 
 | The brief said | Actual reference behaviour (normative here) |
 |---|---|

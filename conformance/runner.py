@@ -2,6 +2,7 @@
 """Run OnlyBlocks golden JSON-RPC cases and online or offline behavioral checks."""
 
 import argparse
+import base64
 import contextlib
 import http.client
 import json
@@ -26,6 +27,33 @@ from mock_old_faithful import ENTRY, SLOTS_PER_EPOCH, MockOldFaithful
 
 ROOT = Path(__file__).resolve().parent.parent
 LIVE_URL = "https://files.old-faithful.net"
+# A cold live getBlock is four sequential HTTPS Range reads (two for the slot, two for its parent).
+LIVE_TIMEOUT = 120
+MAX_BODY = 1024 * 1024
+# Mainnet history is immutable. Rust, Node.js and a public mainnet RPC node agree on these facts.
+LIVE_BLOCKS = {
+    302400001: {
+        "blockhash": "KPY8YHhZTuKXuA5ncyMrhWmLwfEq6ZmLzwYxF1VKneo",
+        "previousBlockhash": "HTCes91cfwRratW4babPCUqe54N8LqCmx7UMC8fsBmuQ",
+        "parentSlot": 302400000, "blockTime": 1732048881, "blockHeight": 280880470,
+        "transactions": 140, "fees": 366242266, "v0": 104, "failed": 20,
+        "first_signature": "WgbVjEpMi9EmtdZ6FYnZc494gd4BqRmZ6A2WPSznJm3Po4EYgfJtLJKe1Xqo1K9fQpCn4tGHNpdfS3h84Qs4c4x",
+        "last_signature": "3eNJT3xUQBh8AuZALx5fQ5rETkzVM4v1mNgDg4Whqng1nnjR8xqyzUWSkzewCD89gwyQAXQrTMa4gxob7Agco2gE",
+        "rewards": [{"pubkey": "6Rk694kh1QTyQkirdb1uDZmS5xqG9bNaYtxx8d311Mr7", "lamports": 183121133,
+                     "postBalance": 2305000118, "rewardType": "Fee", "commission": None}],
+    },
+    43200000: {
+        "blockhash": "HVHEgGRbukDHtRysZFfbfy4ssdWKW1gDY6gsngCycrvf",
+        "previousBlockhash": "47PrqQ4MJrT4G2GB7uHk5CdZadTKspB5HgDszzxHPJc2",
+        "parentSlot": 43199999, "blockTime": 1603254141, "blockHeight": None,
+        "transactions": 208, "fees": 1045000, "v0": 0, "failed": 3,
+        "first_signature": "qsvdGz5heK2eaZY8tq9tTv2RXn1Gpi5mjUru2gRSAumNEzR3muLA3bRscohAKuGW3q6SEfzsTiRDaBeGSgJuwcx",
+        "last_signature": "gwsLfSNsgqbQwaSLUH9zSmKDYJJ1BrmkqUytjvRJ4oJwiB9navBEFzjw24r4WvWzUa9LSyJNkrNrPwVwF6svVzg",
+        "rewards": [],
+    },
+}
+BLOCK_HEADER_KEYS = ("blockhash", "previousBlockhash", "parentSlot", "blockTime", "blockHeight")
+BASE58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
 MISSING = object()
 META_PATH = r"\$\.transactions\[\d+\]\.meta"
 MESSAGE_PATH = r"\$\.transactions\[\d+\]\.transaction\.message"
@@ -477,30 +505,133 @@ def retry_probe(implementation, mock, case, strict_parsed):
             raise CheckFailed(f"expected a cold retry followed by a CAR request, got {stats}")
 
 
+def raw_post(bind, body, timeout=30):
+    """POST over a bare socket. Return the HTTP status, or None if the server hung up without one."""
+    head = (f"POST / HTTP/1.1\r\nHost: {bind[0]}:{bind[1]}\r\nContent-Type: application/json\r\n"
+            f"Content-Length: {len(body)}\r\nConnection: close\r\n\r\n").encode()
+    reply = b""
+    try:
+        with socket.create_connection(bind, timeout=timeout) as connection:
+            try:
+                connection.sendall(head + body)
+            except OSError:
+                pass  # A server may reject from the headers alone and close while we still send.
+            while chunk := connection.recv(65536):
+                reply += chunk
+    except OSError:
+        pass
+    status = re.match(rb"HTTP/1\.[01] ([0-9]{3})", reply)
+    return int(status[1]) if status else None
+
+
+def hostile_probe(implementation, mock):
+    """SPEC 2.4, 5.1 and 6: oversize and deeply nested bodies are rejected without a crash."""
+    with running_server(implementation, mock.base_url) as (bind, tmpdir, _):
+        mock.reset()
+        prefix = b'{"jsonrpc":"2.0","id":"probe","method":"getHealth","pad":"'
+        oversize = prefix + b"a" * (MAX_BODY + 1 - len(prefix) - 2) + b'"}'
+        status = raw_post(bind, oversize)
+        if status not in (413, None):
+            raise CheckFailed(f"{len(oversize)}-byte body: expected HTTP 413 or a dropped connection, "
+                              f"got HTTP {status}")
+        # Exactly 1 MiB of valid JSON: 524288 nested arrays.
+        reply = rpc(bind, "[" * (MAX_BODY // 2) + "]" * (MAX_BODY // 2))
+        errors = reply if isinstance(reply, list) else [reply]
+        codes = [item.get("error", {}).get("code") if isinstance(item, dict) else None for item in errors]
+        if len(errors) != 1 or codes[0] not in (-32700, -32600) or (isinstance(reply, list) and codes[0] != -32600):
+            raise CheckFailed(f"1 MiB nested-array body: expected -32700 or -32600, got {describe(reply)}")
+        validate(dict(error_expected(codes[0]), expected_id=None), errors[0], True)
+        validate(result_expected("ok"), rpc(bind, request("getHealth")), True)
+        check_tmpdir(tmpdir)
+        compare(0, mock.stats()["total_requests"], "hostile input upstream requests")
+
+
+def base58_decode(text):
+    number = 0
+    for char in text:
+        digit = BASE58.find(char)
+        if digit < 0:
+            raise CheckFailed(f"invalid Base58 character {char!r}")
+        number = number * 58 + digit
+    zeros = len(text) - len(text.lstrip("1"))
+    return bytes(zeros) + number.to_bytes((number.bit_length() + 7) // 8, "big")
+
+
+def live_block(bind, slot, config):
+    time.sleep(1)
+    response = rpc(bind, request("getBlock", [slot, config]), LIVE_TIMEOUT)
+    block = response.get("result") if isinstance(response, dict) else None
+    if not isinstance(block, dict):
+        mismatch("$.result", "block object", response)
+    validate(result_expected(block), response, True)
+    for key in BLOCK_HEADER_KEYS:
+        compare(LIVE_BLOCKS[slot][key], block.get(key, MISSING), key_path("$", key))
+    compare(LIVE_BLOCKS[slot]["rewards"], block.get("rewards", MISSING), "$.rewards")
+    return block
+
+
+def live_slot(bind, slot, encodings):
+    """Compare one immutable mainnet block with pinned facts, and its encodings with each other."""
+    expected = LIVE_BLOCKS[slot]
+    config = {"encoding": "json", "maxSupportedTransactionVersion": 0}
+    block = live_block(bind, slot, config)
+    transactions = block.get("transactions")
+    if not isinstance(transactions, list) or not all(
+        isinstance(tx, dict) and isinstance(tx.get("meta"), dict) and isinstance(tx.get("transaction"), dict)
+        and isinstance(tx["transaction"].get("signatures"), list) and tx["transaction"]["signatures"]
+        for tx in transactions
+    ):
+        mismatch("$.transactions", "array of transactions with signatures and metadata", transactions)
+    metas = [tx["meta"] for tx in transactions]
+    signatures = [tx["transaction"]["signatures"][0] for tx in transactions]
+    facts = {
+        "transactions": len(transactions),
+        "fees": sum(meta["fee"] for meta in metas if type(meta.get("fee")) is int),
+        "v0": sum(type(tx.get("version")) is int and tx["version"] == 0 for tx in transactions),
+        "failed": sum(meta.get("err") is not None for meta in metas),
+        "first_signature": signatures[0] if signatures else None,
+        "last_signature": signatures[-1] if signatures else None,
+    }
+    for name, value in facts.items():
+        compare(expected[name], value, f"$.transactions ({name})")
+    compare(signatures, live_block(bind, slot, dict(config, transactionDetails="signatures")).get(
+        "signatures", MISSING), "$.signatures")
+    wire = {}
+    for encoding in encodings:
+        encoded = live_block(bind, slot, dict(config, encoding=encoding)).get("transactions", MISSING)
+        if not isinstance(encoded, list) or len(encoded) != len(transactions):
+            mismatch(f"{encoding} $.transactions.length", len(transactions),
+                     len(encoded) if isinstance(encoded, list) else encoded)
+        wire[encoding] = []
+        for index, (tx, reference) in enumerate(zip(encoded, transactions)):
+            path = f"{encoding} $.transactions[{index}]"
+            pair = tx.get("transaction") if isinstance(tx, dict) else None
+            if not (isinstance(pair, list) and len(pair) == 2 and isinstance(pair[0], str) and pair[1] == encoding):
+                mismatch(path + ".transaction", ["<data>", encoding], pair)
+            try:
+                raw = base64.b64decode(pair[0], validate=True) if encoding == "base64" else base58_decode(pair[0])
+            except ValueError as error:
+                raise CheckFailed(f"{path}.transaction: {error}") from error
+            # One-byte compact-u16 signature count, then the 64-byte signatures.
+            if raw[1:65] != base58_decode(signatures[index]):
+                raise CheckFailed(f"{path}.transaction: first signature differs from the json encoding")
+            wire[encoding].append(raw)
+            compare(reference["meta"], tx.get("meta", MISSING), path + ".meta", True)
+            compare(reference.get("version", MISSING), tx.get("version", MISSING), path + ".version")
+    if len(wire) == 2 and wire["base64"] != wire["base58"]:
+        raise CheckFailed("base64 and base58 transactions decode to different bytes")
+
+
 def live_probe(implementation):
     with running_server(implementation, LIVE_URL) as (bind, tmpdir, _):
-        config = {"encoding": "json", "maxSupportedTransactionVersion": 0}
-        for slot in (302400001, 302400004, 43200000):
-            time.sleep(1)
+        for slot, encodings in ((302400001, ("base64", "base58")), (302400004, ()), (43200000, ("base64",))):
             try:
-                response = rpc(bind, request("getBlock", [slot, config]))
                 if slot == 302400004:
-                    validate(error_expected(-32007), response, True)
+                    time.sleep(1)
+                    config = {"encoding": "json", "maxSupportedTransactionVersion": 0}
+                    validate(error_expected(-32007), rpc(bind, request("getBlock", [slot, config]), LIVE_TIMEOUT), True)
                 else:
-                    block = response.get("result") if isinstance(response, dict) else None
-                    if not isinstance(block, dict):
-                        mismatch("$.result", "block object", response)
-                    validate(result_expected(block), response, True)
-                    if not isinstance(block.get("blockhash"), str) or not block["blockhash"]:
-                        mismatch("$.result.blockhash", "nonempty string", block.get("blockhash", MISSING))
-                    transactions = block.get("transactions")
-                    if not isinstance(transactions, list) or not transactions:
-                        mismatch("$.result.transactions", "nonempty array", transactions)
-                    if slot == 302400001 and not any(
-                        isinstance(tx, dict) and type(tx.get("version")) is int and tx["version"] == 0
-                        for tx in transactions
-                    ):
-                        raise CheckFailed("$.result.transactions has no v0 transaction")
+                    live_slot(bind, slot, encodings)
                 check_tmpdir(tmpdir)
             except CheckFailed as error:
                 raise CheckFailed(f"live slot {slot}: {error}") from error
@@ -608,6 +739,7 @@ def run_implementation(implementation, mock, case, args):
         ("golden cases", lambda: golden_and_removed(implementation, mock, case, args.strict_parsed)),
         ("RAM cache", lambda: cache_probe(implementation, mock, case, args.strict_parsed, args.bench, stats)),
         ("HTTP 429 retry", lambda: retry_probe(implementation, mock, case, args.strict_parsed)),
+        ("hostile input", lambda: hostile_probe(implementation, mock)),
     ]
     if args.bench:
         checks.append(("benchmark files", lambda: stats.update(benchmark_files(implementation))))
@@ -695,10 +827,16 @@ def handle(req):
 
 class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
-        raw = self.rfile.read(int(self.headers["Content-Length"]))
+        length = int(self.headers["Content-Length"])
+        if length > 1 << 20:
+            self.send_response(413)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        raw = self.rfile.read(length)
         try:
             req = json.loads(raw)
-        except ValueError:
+        except (ValueError, RecursionError):
             req = {}
         data = json.dumps(handle(req)).encode()
         self.send_response(200)
@@ -769,7 +907,7 @@ def self_test():
             raise CheckFailed(f"self-test failing fixture did not report {diff!r}:\n"
                               f"{failing.stdout}{failing.stderr}")
     print("Self-test PASS: Range origin, golden cases, parsed comparison, zero-network getTransaction, "
-          "RAM cache, HTTP 429 retry, benchmarks")
+          "RAM cache, HTTP 429 retry, hostile input, benchmarks")
     print(f"Self-test PASS: failing golden case exited 1 with {diff}")
 
 
