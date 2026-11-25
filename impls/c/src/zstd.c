@@ -103,7 +103,6 @@ typedef struct {
 static size_t read_fse_description(ctx_t *c, const uint8_t *d, size_t pos, size_t limit, int max_symbol,
                                    int max_log, int16_t *probs, int *nprobs, int *log_out) {
     size_t bitpos = pos * 8;
-#define FPEEK(n) fpeek(d, limit, bitpos, (n))
     int accuracy_log;
     {
         uint32_t v = 0;
@@ -161,7 +160,6 @@ static size_t read_fse_description(ctx_t *c, const uint8_t *d, size_t pos, size_
             threshold >>= 1;
         }
     }
-#undef FPEEK
     if (remaining != 1 || n > max_symbol + 1) ZERR(c, "corrupt FSE description");
     size_t end = (bitpos + 7) >> 3;
     if (end > limit) ZERR(c, "FSE description overruns its section");
@@ -316,10 +314,6 @@ typedef struct {
     fse_t ll, of, ml;
     uint8_t *lit; /* literal scratch, BLOCK_SIZE_MAX bytes */
 } frame_t;
-
-typedef struct {
-    buf_t out;
-} zout_t;
 
 static size_t decode_literals(ctx_t *c, const uint8_t *d, size_t dlen, size_t pos, size_t end, frame_t *f,
                               const uint8_t **lit, size_t *nlit) {
