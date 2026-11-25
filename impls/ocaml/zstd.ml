@@ -483,7 +483,7 @@ let decode_frame data pos out =
   end;
   !pos
 
-let decompress (data : string) : string =
+let decompress_exn (data : string) : string =
   let out = { buf = Bytes.create (min (16 lsl 20) (max 1024 (3 * String.length data))); len = 0 } in
   let pos = ref 0 in
   let n = String.length data in
@@ -497,5 +497,12 @@ let decompress (data : string) : string =
     else fail "unknown frame magic"
   done;
   Bytes.sub_string out.buf 0 out.len
+
+(* Any stray stdlib exception on hostile input is still just a zstd failure,
+   so the caller's raw-bytes fallback (WIRE_FORMATS.md section 9.1) applies. *)
+let decompress data =
+  try decompress_exn data with
+  | Invalid_argument m | Failure m -> fail m
+  | Not_found -> fail "corrupt frame"
 
 let is_frame s = String.length s >= 4 && String.sub s 0 4 = "\x28\xb5\x2f\xfd"
