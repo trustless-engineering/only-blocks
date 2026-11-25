@@ -31,3 +31,9 @@ invokes nix.
 * **JSON.** `OnlyBlocks.JSON` is a small parser that keeps number source
   text, so slots are validated as literals and ids are echoed verbatim.
   Nesting is capped at 128 levels.
+
+**Process model.** The server is one OS process (`beam.smp`). The only
+other process is the VM's own `erl_child_setup`. Every BEAM forks this
+helper at boot to spawn ports; it is part of the runtime and can't be
+turned off. The server never opens a port or child process: no `curl`,
+no `os:cmd`, and the TLS trust store is read from a PEM file.

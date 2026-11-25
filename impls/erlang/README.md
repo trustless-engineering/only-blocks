@@ -34,3 +34,9 @@ to `ebin/` with `erlc`, and `run.sh` `exec`s `erl -noshell`.
   and ids be echoed byte for byte. Nesting is capped at 128 levels.
 * **Errors.** RPC errors are `throw({rpc, Code, Msg})`. Every other
   exception becomes `-32603`.
+
+**Process model.** The server is one OS process (`beam.smp`). The only
+other process is the VM's own `erl_child_setup`. Every BEAM forks this
+helper at boot to spawn ports; it is part of the runtime and can't be
+turned off. The server never opens a port or child process: no `curl`,
+no `os:cmd`, and the TLS trust store is read from a PEM file.

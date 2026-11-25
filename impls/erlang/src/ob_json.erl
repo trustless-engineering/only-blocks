@@ -67,15 +67,14 @@ string(<<$\\, E, R/binary>>, Acc) ->
         $t -> string(R, [9 | Acc]);
         $u -> unicode_escape(R, Acc)
     end;
-string(<<C, R/binary>>, Acc) when C >= 16#20 ->
-    %% Copy a run of plain bytes in one go.
-    {Run, Rest} = plain(R, 1),
-    Len = Run,
-    <<Chunk:Len/binary, _/binary>> = <<C, R/binary>>,
+string(<<C, _/binary>> = Bin, Acc) when C >= 16#20 ->
+    %% Slice a run of plain bytes straight out of the input (no copying).
+    Len = plain(Bin, 0),
+    <<Chunk:Len/binary, Rest/binary>> = Bin,
     string(Rest, [Chunk | Acc]).
 
 plain(<<C, R/binary>>, N) when C >= 16#20, C =/= $", C =/= $\\ -> plain(R, N + 1);
-plain(R, N) -> {N, R}.
+plain(_, N) -> N.
 
 unicode_escape(<<H:4/binary, R/binary>>, Acc) ->
     Code = binary_to_integer(H, 16),
