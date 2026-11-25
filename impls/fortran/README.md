@@ -38,7 +38,8 @@ python3 ../../conformance/runner.py --impl fortran
   * protobuf with prost semantics, including packed and unpacked repeated
     fields, merged sub-messages and group skipping
   * the five pre-epoch-157 bincode `TransactionStatusMeta` layouts
-  * Base58 and Base64, and `VersionedTransaction` decoding
+  * Base58 and Base64, and `VersionedTransaction` decoding (legacy, v0 and
+    SIMD-0385 v1)
   * the section 14 signer and writable flags
   * an RFC 8259 JSON parser with UTF-8 and surrogate-pair validation and a
     128-level depth cap
@@ -86,7 +87,7 @@ python3 ../../conformance/runner.py --impl fortran
 | `ob_http` | buffered socket/pipe readers, HTTP framing, Range client with retry/backoff |
 | `ob_cache` | LRU maps |
 | `ob_car` | CAR index, CIDs, CBOR, IPLD nodes, DataFrame reassembly |
-| `ob_tx` | `VersionedTransaction` |
+| `ob_tx` | `VersionedTransaction` (legacy, v0, v1) |
 | `ob_meta` | protobuf and bincode metadata and rewards, epoch-157 split |
 | `ob_render` | `getBlock` JSON for every encoding and detail level |
 | `ob_rpc` | envelopes, parameter validation, the two-range-read pipeline |

@@ -144,6 +144,7 @@ function block_params(p,   s, c, k, v) {
     if (GB_ENC != "json" && GB_ENC != "jsonParsed" && GB_ENC != "base64" && GB_ENC != "base58") return 0
     if (GB_DETAILS != "full" && GB_DETAILS != "accounts" && GB_DETAILS != "signatures" && GB_DETAILS != "none") return 0
     if (GB_DETAILS == "accounts" && GB_ENC != "json") return 0
+    if (GB_ENC == "base58" && GB_MAXV != "" && GB_MAXV + 0 >= 1) return 0
     return 1
 }
 
@@ -251,9 +252,9 @@ function gb_run(   blk, sv, ne, info, phi, plo, pdec, bt, ht, bh, prev, pblk, pn
                     QNONE = 0
                     if (!unwrap("m", DF_S, DF_N)) return 0
                 }
-                if (QNONE && TXV0) meta_reset()
-                if (TXV0 && GB_MAXV == "")
-                    return fail(-32015, "Transaction version (0) is not supported by the requesting client. Please try the request again with the following configuration parameter: \"maxSupportedTransactionVersion\": 0")
+                if (QNONE && TXVN != "") meta_reset()
+                if (TXVN != "" && (GB_MAXV == "" || TXVN > GB_MAXV + 0))
+                    return fail(-32015, "Transaction version (" TXVN ") is not supported by the requesting client. Please try the request again with the following configuration parameter: \"maxSupportedTransactionVersion\": " TXVN)
                 build_keys()
                 body = tx_body_json(GB_ENC, accounts)
                 if (ERR) return 0
@@ -263,7 +264,7 @@ function gb_run(   blk, sv, ne, info, phi, plo, pdec, bt, ht, bh, prev, pblk, pn
                     if (ERR) return 0
                 }
                 ver = ""
-                if (!QNONE && GB_MAXV != "") ver = TXV0 ? "0" : "\"legacy\""
+                if (!QNONE && GB_MAXV != "") ver = TXVN != "" ? TXVN : "\"legacy\""
                 emit((first ? "" : ",") "{\"transaction\":" body ",\"meta\":" metaj (ver != "" ? ",\"version\":" ver : "") "}")
                 first = 0
             }

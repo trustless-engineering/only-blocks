@@ -76,8 +76,11 @@ proc b58_json {bytes} {js [base58 $bytes]}
 proc tx_json {tx meta encoding details include_rewards max} {
     lassign $tx version signatures message raw
     set v0 [expr {$version eq "0"}]
-    if {$v0} {
-        if {$max eq ""} {rpc_fail -32015 "Transaction version (0) requires maxSupportedTransactionVersion"}
+    set v1 [expr {$version eq "1"}]
+    if {$version ne "legacy"} {
+        if {$max eq "" || $version > $max} {
+            rpc_fail -32015 "Transaction version ($version) is not supported by the requesting client. Please try the request again with the following configuration parameter: \"maxSupportedTransactionVersion\": $version"
+        }
         if {$meta eq ""} {set meta [empty_meta]}
     }
     set parsed [expr {$encoding eq "jsonParsed"}]
@@ -106,6 +109,11 @@ proc tx_json {tx meta encoding details include_rewards max} {
             dict set message recentBlockhash [js [dict get $message recentBlockhash]]
             if {$v0} {
                 dict set message addressTableLookups [jarray lookup_json [dict get $message addressTableLookups]]
+            }
+            if {$v1} {
+                set c {}
+                dict for {k v} [dict get $message transactionConfig] {dict set c $k [jn $v]}
+                dict set message transactionConfig [jo $c]
             }
             if {$parsed} {
                 dict unset message header
@@ -154,8 +162,8 @@ proc tx_json {tx meta encoding details include_rewards max} {
     }
     dict set result meta [jo $meta]
     if {$max ne ""} {
-        if {$v0} {
-            dict set result version [jn 0]
+        if {$version ne "legacy"} {
+            dict set result version [jn $version]
         } else {
             dict set result version [js $version]
         }
@@ -306,6 +314,7 @@ proc params {node} {
     }
     set max [fetch $cfg maxSupportedTransactionVersion]
     if {$max ne ""} {set max [uint_param $max 255]}
+    if {[value $encoding] eq "base58" && $max ne "" && $max >= 1} {bad_params}
     list $slot [value $encoding] [value $details] [value $rewards] $max
 }
 proc response {id field val} {jo [dict create jsonrpc [js 2.0] $field $val id $id]}
