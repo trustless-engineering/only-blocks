@@ -1,173 +1,145 @@
+//! Command-line and environment configuration (SPEC.md §2.3): flag > environment > default.
+
 use std::time::Duration;
 
-use url::Url;
+use crate::http_client::{parse_base_url, BaseUrl};
+use crate::old_faithful::ClientConfig;
 
-use crate::error::OldFaithfulError;
-
-/// Default base URL for the Old Faithful public archive.
+pub const DEFAULT_BIND: &str = "127.0.0.1:8899";
 pub const DEFAULT_BASE_URL: &str = "https://files.old-faithful.net";
 
-/// Default maximum CAR slice size (128 MiB), safely above ~55 MB epoch-boundary reward blocks.
-pub const DEFAULT_MAX_SLICE_BYTES: u64 = 128 * 1024 * 1024;
-
-/// Default TCP/TLS connect timeout.
-pub const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
-
-/// Default per-request timeout (generous enough for ~55 MB epoch-boundary reward blocks).
-pub const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
-
-/// Default idle connection timeout in the HTTP pool.
-pub const DEFAULT_POOL_IDLE_TIMEOUT: Duration = Duration::from_secs(90);
-
-/// Default maximum idle connections retained per host.
-pub const DEFAULT_POOL_MAX_IDLE_PER_HOST: usize = 16;
-
-/// Default maximum number of concurrent in-flight HTTP requests.
-pub const DEFAULT_MAX_CONCURRENT_REQUESTS: usize = 32;
-
-/// Default maximum number of entries in the RAM-only slot-range LRU cache.
-///
-/// Each cached entry holds a `u64` slot key plus a small enum (16 bytes) and LRU metadata,
-/// keeping 100,000 entries under ~8 MiB of RAM with zero disk usage.
-pub const DEFAULT_SLOT_RANGE_CACHE_CAPACITY: usize = 100_000;
-
-/// Retry and exponential backoff configuration for transient Old Faithful failures.
 #[derive(Debug, Clone)]
-pub struct RetryConfig {
-    /// Maximum number of retries after the initial attempt (`0` disables retries).
-    pub max_retries: usize,
-    /// Initial backoff delay before the first retry.
-    pub initial_backoff: Duration,
-    /// Maximum backoff delay (also bounds `Retry-After` delays).
-    pub max_backoff: Duration,
-    /// Jitter ratio in `[0.0, 1.0]`. A value of `0.5` picks uniformly in `[0.5 * delay, delay]`.
-    pub jitter_ratio: f64,
+pub struct Config {
+    pub bind: String,
+    pub base_url: BaseUrl,
+    pub client: ClientConfig,
+    pub blockhash_cache_capacity: usize,
 }
 
-impl Default for RetryConfig {
-    fn default() -> Self {
-        Self {
-            max_retries: 4,
-            initial_backoff: Duration::from_millis(200),
-            max_backoff: Duration::from_secs(10),
-            jitter_ratio: 0.5,
-        }
-    }
+pub const USAGE: &str = "\
+onlyblocks — zero-crate historical Solana getBlock JSON-RPC server backed by Old Faithful
+
+USAGE:
+    onlyblocks [OPTIONS]
+
+OPTIONS:
+    --bind <HOST:PORT>                   listen address   [env ONLYBLOCKS_BIND, default 127.0.0.1:8899]
+    --base-url <URL>                     archive base URL [env OLD_FAITHFUL_BASE_URL, default https://files.old-faithful.net]
+    --max-slice-bytes <N>                largest CAR slice to fetch (default 134217728)
+    --max-concurrent-requests <N>        upstream requests in flight (default 32)
+    --slot-range-cache-capacity <N>      slot -> range LRU entries (default 100000, 0 disables)
+    --blockhash-cache-capacity <N>       slot -> blockhash LRU entries (default 100000, 0 disables)
+    --max-retries <N>                    retries on 429/5xx/transport errors (default 4)
+    --connect-timeout-secs <N>           upstream connect timeout (default 10)
+    --request-timeout-secs <N>           upstream per-attempt timeout (default 60)
+    -h, --help                           print this help
+    -V, --version                        print the version
+";
+
+pub enum Parsed {
+    Run(Config),
+    Exit(String),
 }
 
-impl RetryConfig {
-    /// Validate retry parameters.
-    pub fn validate(&self) -> Result<(), OldFaithfulError> {
-        if self.max_backoff < self.initial_backoff {
-            return Err(OldFaithfulError::InvalidConfig(
-                "retry.max_backoff must be >= retry.initial_backoff".to_string(),
-            ));
-        }
-        if !(0.0..=1.0).contains(&self.jitter_ratio) || self.jitter_ratio.is_nan() {
-            return Err(OldFaithfulError::InvalidConfig(
-                "retry.jitter_ratio must be in [0.0, 1.0]".to_string(),
-            ));
-        }
-        Ok(())
-    }
+fn number<T: std::str::FromStr>(flag: &str, v: &str) -> Result<T, String> {
+    v.parse::<T>().map_err(|_| format!("invalid value {v:?} for {flag}"))
 }
 
-/// Configuration for [`crate::OldFaithfulClient`].
-#[derive(Debug, Clone)]
-pub struct OldFaithfulConfig {
-    /// Base URL for Old Faithful (e.g. `https://files.old-faithful.net`).
-    pub base_url: String,
-    /// HTTP `User-Agent` header sent on every request.
-    pub user_agent: String,
-    /// Connect timeout for HTTP requests.
-    pub connect_timeout: Duration,
-    /// Total timeout for a single HTTP request attempt (including body streaming).
-    pub request_timeout: Duration,
-    /// Idle timeout for pooled HTTP connections.
-    pub pool_idle_timeout: Duration,
-    /// Maximum number of idle pooled connections per host.
-    pub pool_max_idle_per_host: usize,
-    /// Maximum allowed CAR slice size in bytes (enforced before and while buffering).
-    pub max_slice_bytes: u64,
-    /// Maximum concurrent in-flight HTTP requests enforced by a Tokio semaphore.
-    pub max_concurrent_requests: usize,
-    /// Maximum entries in the bounded RAM-only slot-range LRU cache (`0` disables caching).
-    pub slot_range_cache_capacity: usize,
-    /// Retry/backoff settings for `429`, `5xx`, and transient transport errors.
-    pub retry: RetryConfig,
-}
-
-impl Default for OldFaithfulConfig {
-    fn default() -> Self {
-        Self {
-            base_url: DEFAULT_BASE_URL.to_string(),
-            user_agent: format!("onlyblocks/{}", env!("CARGO_PKG_VERSION")),
-            connect_timeout: DEFAULT_CONNECT_TIMEOUT,
-            request_timeout: DEFAULT_REQUEST_TIMEOUT,
-            pool_idle_timeout: DEFAULT_POOL_IDLE_TIMEOUT,
-            pool_max_idle_per_host: DEFAULT_POOL_MAX_IDLE_PER_HOST,
-            max_slice_bytes: DEFAULT_MAX_SLICE_BYTES,
-            max_concurrent_requests: DEFAULT_MAX_CONCURRENT_REQUESTS,
-            slot_range_cache_capacity: DEFAULT_SLOT_RANGE_CACHE_CAPACITY,
-            retry: RetryConfig::default(),
+/// Parse `args` (without the program name) and the environment lookup `env`.
+pub fn parse(args: &[String], env: impl Fn(&str) -> Option<String>) -> Result<Parsed, String> {
+    let mut bind: Option<String> = None;
+    let mut base: Option<String> = None;
+    let mut client = ClientConfig::default();
+    let mut blockhash_cache_capacity = 100_000usize;
+    let mut i = 0;
+    while i < args.len() {
+        let arg = &args[i];
+        i += 1;
+        if arg == "-h" || arg == "--help" {
+            return Ok(Parsed::Exit(USAGE.to_string()));
         }
-    }
-}
-
-impl OldFaithfulConfig {
-    /// Create a configuration targeting a custom base URL (useful for testing or mirrors).
-    pub fn with_base_url(base_url: impl Into<String>) -> Self {
-        Self {
-            base_url: base_url.into(),
-            ..Self::default()
+        if arg == "-V" || arg == "--version" {
+            return Ok(Parsed::Exit(format!("onlyblocks {}", env!("CARGO_PKG_VERSION"))));
         }
-    }
-
-    /// Validate all configuration fields and return the normalized base URL (without trailing `/`).
-    pub fn validate(&self) -> Result<String, OldFaithfulError> {
-        let trimmed = self.base_url.trim().trim_end_matches('/');
-        if trimmed.is_empty() {
-            return Err(OldFaithfulError::InvalidConfig(
-                "base_url must not be empty".to_string(),
-            ));
+        let Some(flag_body) = arg.strip_prefix("--") else {
+            return Err(format!("unexpected argument {arg:?}\n\n{USAGE}"));
+        };
+        let (name, inline) = match flag_body.split_once('=') {
+            Some((n, v)) => (n, Some(v.to_string())),
+            None => (flag_body, None),
+        };
+        const KNOWN: [&str; 9] = [
+            "bind",
+            "base-url",
+            "max-slice-bytes",
+            "max-concurrent-requests",
+            "slot-range-cache-capacity",
+            "blockhash-cache-capacity",
+            "max-retries",
+            "connect-timeout-secs",
+            "request-timeout-secs",
+        ];
+        if !KNOWN.contains(&name) {
+            return Err(format!("unknown flag --{name}\n\n{USAGE}"));
         }
-        let parsed = Url::parse(trimmed).map_err(|e| {
-            OldFaithfulError::InvalidConfig(format!("invalid base_url '{}': {e}", self.base_url))
-        })?;
-        match parsed.scheme() {
-            "http" | "https" => {}
-            other => {
-                return Err(OldFaithfulError::InvalidConfig(format!(
-                    "unsupported base_url scheme '{other}' (expected http or https)"
-                )));
+        let value = match inline {
+            Some(v) => v,
+            None => {
+                let Some(v) = args.get(i) else { return Err(format!("missing value for --{name}")) };
+                i += 1;
+                v.clone()
             }
+        };
+        let flag = format!("--{name}");
+        match name {
+            "bind" => bind = Some(value),
+            "base-url" => base = Some(value),
+            "max-slice-bytes" => client.max_slice_bytes = number(&flag, &value)?,
+            "max-concurrent-requests" => client.max_concurrent_requests = number(&flag, &value)?,
+            "slot-range-cache-capacity" => client.slot_range_cache_capacity = number(&flag, &value)?,
+            "blockhash-cache-capacity" => blockhash_cache_capacity = number(&flag, &value)?,
+            "max-retries" => client.max_retries = number(&flag, &value)?,
+            "connect-timeout-secs" => client.connect_timeout = Duration::from_secs(number(&flag, &value)?),
+            "request-timeout-secs" => client.request_timeout = Duration::from_secs(number(&flag, &value)?),
+            _ => return Err(format!("unknown flag --{name}\n\n{USAGE}")),
         }
-        if self.user_agent.trim().is_empty() {
-            return Err(OldFaithfulError::InvalidConfig(
-                "user_agent must not be empty".to_string(),
-            ));
+    }
+    let bind = bind.or_else(|| env("ONLYBLOCKS_BIND")).unwrap_or_else(|| DEFAULT_BIND.to_string());
+    let base = base.or_else(|| env("OLD_FAITHFUL_BASE_URL")).unwrap_or_else(|| DEFAULT_BASE_URL.to_string());
+    let base_url = parse_base_url(&base)?;
+    if client.max_slice_bytes == 0 || client.max_concurrent_requests == 0 {
+        return Err("--max-slice-bytes and --max-concurrent-requests must be > 0".into());
+    }
+    if client.connect_timeout.is_zero() || client.request_timeout.is_zero() {
+        return Err("timeouts must be > 0".into());
+    }
+    Ok(Parsed::Run(Config { bind, base_url, client, blockhash_cache_capacity }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn run(args: &[&str], env: &[(&str, &str)]) -> Result<Config, String> {
+        let args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
+        let env: Vec<(String, String)> = env.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
+        match parse(&args, |k| env.iter().find(|(n, _)| n == k).map(|(_, v)| v.clone()))? {
+            Parsed::Run(c) => Ok(c),
+            Parsed::Exit(m) => Err(m),
         }
-        if self.max_slice_bytes == 0 {
-            return Err(OldFaithfulError::InvalidConfig(
-                "max_slice_bytes must be > 0".to_string(),
-            ));
-        }
-        if self.max_concurrent_requests == 0 {
-            return Err(OldFaithfulError::InvalidConfig(
-                "max_concurrent_requests must be > 0".to_string(),
-            ));
-        }
-        if self.connect_timeout.is_zero() {
-            return Err(OldFaithfulError::InvalidConfig(
-                "connect_timeout must be > 0".to_string(),
-            ));
-        }
-        if self.request_timeout.is_zero() {
-            return Err(OldFaithfulError::InvalidConfig(
-                "request_timeout must be > 0".to_string(),
-            ));
-        }
-        self.retry.validate()?;
-        Ok(trimmed.to_string())
+    }
+
+    #[test]
+    fn precedence_and_forms() {
+        let c = run(&[], &[]).unwrap();
+        assert_eq!(c.bind, DEFAULT_BIND);
+        assert_eq!(c.base_url.url, DEFAULT_BASE_URL);
+        let c = run(&[], &[("ONLYBLOCKS_BIND", "0.0.0.0:1"), ("OLD_FAITHFUL_BASE_URL", "http://x:2/")]).unwrap();
+        assert_eq!((c.bind.as_str(), c.base_url.url.as_str()), ("0.0.0.0:1", "http://x:2"));
+        let c = run(&["--bind", "127.0.0.1:3", "--base-url=http://y"], &[("ONLYBLOCKS_BIND", "0.0.0.0:1")]).unwrap();
+        assert_eq!((c.bind.as_str(), c.base_url.url.as_str()), ("127.0.0.1:3", "http://y"));
+        assert!(run(&["--bogus", "1"], &[]).is_err());
+        assert!(run(&["--base-url", "ftp://x"], &[]).is_err());
+        assert!(run(&["--bind"], &[]).is_err());
     }
 }

@@ -1,1148 +1,600 @@
-//! Decoders for Solana `TransactionStatusMeta` and `Rewards` stored inside Old Faithful CAR
-//! `DataFrame` payloads.
-//!
-//! Handles the historical format split at Epoch 157 (slot `67_824_000`):
-//! - Slots `< 67_824_000` (Epoch `< 157`): bincode-encoded `StoredTransactionStatusMeta` and
-//!   `StoredExtendedRewards` (with fallback to protobuf if an archive slot uses protobuf).
-//! - Slots `>= 67_824_000` (Epoch `>= 157`): zstd-compressed protobuf `TransactionStatusMeta` and
-//!   `Rewards` (with fallback to bincode if needed).
-//!
-//! Pure-Rust `prost` definitions avoid C++ `protoc` build dependencies while maintaining exact
-//! wire parity with `solana.storage.ConfirmedBlock`.
+//! Protobuf wire reader for `solana.storage.ConfirmedBlock` (WIRE_FORMATS.md §10), with
+//! prost semantics: unknown fields skipped, wrong wire types rejected, packed or unpacked
+//! repeated scalars, last-wins scalars and field-merged sub-messages.
 
-use std::io::Read;
-use std::str::FromStr;
+use crate::bincode;
+use crate::codec::{parse_unsigned, real_number_string_trimmed};
+use crate::error::{DResult, DecodeError};
+use crate::model::*;
 
-use bincode::Options as _;
-use prost::Message;
-use serde::{Deserialize, Serialize};
-use solana_account_decoder_client_types::token::UiTokenAmount;
-use solana_message::compiled_instruction::CompiledInstruction;
-use solana_message::v0::LoadedAddresses;
-use solana_pubkey::Pubkey;
-use solana_reward_info::RewardType;
-use solana_serde::default_on_eof;
-use solana_transaction_context::TransactionReturnData;
-use solana_transaction_error::{TransactionError, TransactionResult};
-use solana_transaction_status::{
-    InnerInstruction, InnerInstructions, Reward, Rewards, TransactionStatusMeta,
-    TransactionTokenBalance,
-};
-use thiserror::Error;
+const RECURSION_LIMIT: u32 = 100;
 
-use crate::old_faithful::SLOTS_PER_EPOCH;
+type PResult<T> = Result<T, String>;
 
-/// First epoch where Old Faithful stores transaction metadata and rewards in protobuf format.
-pub const BINCODE_EPOCH_CUTOFF: u64 = 157;
+const VARINT: u8 = 0;
+const I64: u8 = 1;
+const LEN: u8 = 2;
+const SGROUP: u8 = 3;
+const EGROUP: u8 = 4;
+const I32: u8 = 5;
 
-/// First slot of Epoch 157 (`157 * 432_000 = 67_824_000`).
-pub const BINCODE_SLOT_CUTOFF: u64 = BINCODE_EPOCH_CUTOFF * SLOTS_PER_EPOCH;
-
-/// Maximum uncompressed payload size accepted from a single zstd frame (512 MiB).
-///
-/// Safely accommodates ~55 MiB compressed epoch-boundary reward blocks while preventing
-/// unbounded memory allocation from corrupted or malicious zstd decompression bombs.
-pub const MAX_DECOMPRESSED_BYTES: usize = 512 * 1024 * 1024;
-
-/// Errors returned while decoding Solana transaction status metadata or block rewards.
-#[derive(Debug, Error)]
-pub enum ProtoDecodeError {
-    #[error("zstd decompression failed: {0}")]
-    Zstd(String),
-
-    #[error("failed to decode transaction status metadata for slot {slot}: {reason}")]
-    TransactionMeta { slot: u64, reason: String },
-
-    #[error("failed to decode rewards for slot {slot}: {reason}")]
-    Rewards { slot: u64, reason: String },
-
-    #[error("invalid pubkey bytes (expected 32 bytes, got {actual_len})")]
-    InvalidPubkeyLength { actual_len: usize },
-
-    #[error("failed to deserialize bincode TransactionError: {0}")]
-    TransactionErrorBincode(String),
+struct Reader<'a> {
+    buf: &'a [u8],
+    pos: usize,
 }
 
-/// Decoded block rewards plus optional partitioned-rewards count.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct DecodedRewards {
-    pub rewards: Rewards,
-    pub num_partitions: Option<u64>,
-}
-
-// ---------------------------------------------------------------------------
-// Protobuf wire structs (`solana.storage.ConfirmedBlock`)
-// ---------------------------------------------------------------------------
-
-#[derive(Clone, PartialEq, Message)]
-pub(crate) struct ProtoTransactionStatusMeta {
-    #[prost(message, optional, tag = "1")]
-    pub err: Option<ProtoTransactionError>,
-    #[prost(uint64, tag = "2")]
-    pub fee: u64,
-    #[prost(uint64, repeated, tag = "3")]
-    pub pre_balances: Vec<u64>,
-    #[prost(uint64, repeated, tag = "4")]
-    pub post_balances: Vec<u64>,
-    #[prost(message, repeated, tag = "5")]
-    pub inner_instructions: Vec<ProtoInnerInstructions>,
-    #[prost(bool, tag = "10")]
-    pub inner_instructions_none: bool,
-    #[prost(string, repeated, tag = "6")]
-    pub log_messages: Vec<String>,
-    #[prost(bool, tag = "11")]
-    pub log_messages_none: bool,
-    #[prost(message, repeated, tag = "7")]
-    pub pre_token_balances: Vec<ProtoTokenBalance>,
-    #[prost(message, repeated, tag = "8")]
-    pub post_token_balances: Vec<ProtoTokenBalance>,
-    #[prost(message, repeated, tag = "9")]
-    pub rewards: Vec<ProtoReward>,
-    #[prost(bytes = "vec", repeated, tag = "12")]
-    pub loaded_writable_addresses: Vec<Vec<u8>>,
-    #[prost(bytes = "vec", repeated, tag = "13")]
-    pub loaded_readonly_addresses: Vec<Vec<u8>>,
-    #[prost(message, optional, tag = "14")]
-    pub return_data: Option<ProtoReturnData>,
-    #[prost(bool, tag = "15")]
-    pub return_data_none: bool,
-    #[prost(uint64, optional, tag = "16")]
-    pub compute_units_consumed: Option<u64>,
-    #[prost(uint64, optional, tag = "17")]
-    pub cost_units: Option<u64>,
-}
-
-#[derive(Clone, PartialEq, Message)]
-pub(crate) struct ProtoTransactionError {
-    #[prost(bytes = "vec", tag = "1")]
-    pub err: Vec<u8>,
-}
-
-#[derive(Clone, PartialEq, Message)]
-pub(crate) struct ProtoInnerInstructions {
-    #[prost(uint32, tag = "1")]
-    pub index: u32,
-    #[prost(message, repeated, tag = "2")]
-    pub instructions: Vec<ProtoInnerInstruction>,
-}
-
-#[derive(Clone, PartialEq, Message)]
-pub(crate) struct ProtoInnerInstruction {
-    #[prost(uint32, tag = "1")]
-    pub program_id_index: u32,
-    #[prost(bytes = "vec", tag = "2")]
-    pub accounts: Vec<u8>,
-    #[prost(bytes = "vec", tag = "3")]
-    pub data: Vec<u8>,
-    #[prost(uint32, optional, tag = "4")]
-    pub stack_height: Option<u32>,
-}
-
-#[derive(Clone, PartialEq, Message)]
-pub(crate) struct ProtoTokenBalance {
-    #[prost(uint32, tag = "1")]
-    pub account_index: u32,
-    #[prost(string, tag = "2")]
-    pub mint: String,
-    #[prost(message, optional, tag = "3")]
-    pub ui_token_amount: Option<ProtoUiTokenAmount>,
-    #[prost(string, tag = "4")]
-    pub owner: String,
-    #[prost(string, tag = "5")]
-    pub program_id: String,
-}
-
-#[derive(Clone, PartialEq, Message)]
-pub(crate) struct ProtoUiTokenAmount {
-    #[prost(double, tag = "1")]
-    pub ui_amount: f64,
-    #[prost(uint32, tag = "2")]
-    pub decimals: u32,
-    #[prost(string, tag = "3")]
-    pub amount: String,
-    #[prost(string, tag = "4")]
-    pub ui_amount_string: String,
-}
-
-#[derive(Clone, PartialEq, Message)]
-pub(crate) struct ProtoReturnData {
-    #[prost(bytes = "vec", tag = "1")]
-    pub program_id: Vec<u8>,
-    #[prost(bytes = "vec", tag = "2")]
-    pub data: Vec<u8>,
-}
-
-#[derive(Clone, PartialEq, Message)]
-pub(crate) struct ProtoReward {
-    #[prost(string, tag = "1")]
-    pub pubkey: String,
-    #[prost(int64, tag = "2")]
-    pub lamports: i64,
-    #[prost(uint64, tag = "3")]
-    pub post_balance: u64,
-    #[prost(int32, tag = "4")]
-    pub reward_type: i32,
-    #[prost(string, tag = "5")]
-    pub commission: String,
-    /// Optional basis-point commission introduced in Agave 4.x (SIMD-0291).
-    #[prost(string, tag = "6")]
-    pub commission_bps: String,
-}
-
-#[derive(Clone, PartialEq, Message)]
-pub(crate) struct ProtoRewards {
-    #[prost(message, repeated, tag = "1")]
-    pub rewards: Vec<ProtoReward>,
-    #[prost(message, optional, tag = "2")]
-    pub num_partitions: Option<ProtoNumPartitions>,
-}
-
-#[derive(Clone, PartialEq, Message)]
-pub(crate) struct ProtoNumPartitions {
-    #[prost(uint64, tag = "1")]
-    pub num_partitions: u64,
-}
-
-// ---------------------------------------------------------------------------
-// Pre-Epoch 157 bincode wire structs (`solana-storage-proto`)
-// ---------------------------------------------------------------------------
-
-#[derive(Serialize, Deserialize)]
-pub(crate) struct StoredExtendedReward {
-    pub pubkey: String,
-    pub lamports: i64,
-    #[serde(deserialize_with = "default_on_eof")]
-    pub post_balance: u64,
-    #[serde(deserialize_with = "default_on_eof")]
-    pub reward_type: Option<RewardType>,
-    #[serde(deserialize_with = "default_on_eof")]
-    pub commission: Option<u8>,
-}
-
-pub(crate) type StoredExtendedRewards = Vec<StoredExtendedReward>;
-
-impl From<StoredExtendedReward> for Reward {
-    fn from(value: StoredExtendedReward) -> Self {
-        Self {
-            pubkey: value.pubkey,
-            lamports: value.lamports,
-            post_balance: value.post_balance,
-            reward_type: value.reward_type,
-            commission: value.commission,
-        }
+impl<'a> Reader<'a> {
+    fn new(buf: &'a [u8]) -> Self {
+        Reader { buf, pos: 0 }
     }
-}
 
-#[derive(Serialize, Deserialize)]
-pub(crate) struct StoredTokenAmount {
-    pub ui_amount: f64,
-    pub decimals: u8,
-    pub amount: String,
-}
-
-impl From<StoredTokenAmount> for UiTokenAmount {
-    fn from(value: StoredTokenAmount) -> Self {
-        let ui_amount_string =
-            real_number_string_trimmed(u64::from_str(&value.amount).unwrap_or(0), value.decimals);
-        Self {
-            ui_amount: Some(value.ui_amount),
-            decimals: value.decimals,
-            amount: value.amount,
-            ui_amount_string,
-        }
+    fn done(&self) -> bool {
+        self.pos >= self.buf.len()
     }
-}
 
-#[derive(Serialize, Deserialize)]
-pub(crate) struct StoredTransactionTokenBalance {
-    pub account_index: u8,
-    pub mint: String,
-    pub ui_token_amount: StoredTokenAmount,
-    #[serde(deserialize_with = "default_on_eof")]
-    pub owner: String,
-    #[serde(deserialize_with = "default_on_eof")]
-    pub program_id: String,
-}
-
-impl From<StoredTransactionTokenBalance> for TransactionTokenBalance {
-    fn from(value: StoredTransactionTokenBalance) -> Self {
-        Self {
-            account_index: value.account_index,
-            mint: value.mint,
-            ui_token_amount: value.ui_token_amount.into(),
-            owner: value.owner,
-            program_id: value.program_id,
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-pub(crate) struct StoredTransactionStatusMeta {
-    pub status: TransactionResult<()>,
-    pub fee: u64,
-    pub pre_balances: Vec<u64>,
-    pub post_balances: Vec<u64>,
-    #[serde(deserialize_with = "default_on_eof")]
-    pub inner_instructions: Option<Vec<InnerInstructions>>,
-    #[serde(deserialize_with = "default_on_eof")]
-    pub log_messages: Option<Vec<String>>,
-    #[serde(deserialize_with = "default_on_eof")]
-    pub pre_token_balances: Option<Vec<StoredTransactionTokenBalance>>,
-    #[serde(deserialize_with = "default_on_eof")]
-    pub post_token_balances: Option<Vec<StoredTransactionTokenBalance>>,
-    #[serde(deserialize_with = "default_on_eof")]
-    pub rewards: Option<Vec<StoredExtendedReward>>,
-    #[serde(deserialize_with = "default_on_eof")]
-    pub return_data: Option<TransactionReturnData>,
-    #[serde(deserialize_with = "default_on_eof")]
-    pub compute_units_consumed: Option<u64>,
-    #[serde(deserialize_with = "default_on_eof")]
-    pub cost_units: Option<u64>,
-}
-
-impl From<StoredTransactionStatusMeta> for TransactionStatusMeta {
-    fn from(value: StoredTransactionStatusMeta) -> Self {
-        Self {
-            status: value.status,
-            fee: value.fee,
-            pre_balances: value.pre_balances,
-            post_balances: value.post_balances,
-            inner_instructions: value.inner_instructions,
-            log_messages: value.log_messages,
-            pre_token_balances: value
-                .pre_token_balances
-                .map(|balances| balances.into_iter().map(Into::into).collect()),
-            post_token_balances: value
-                .post_token_balances
-                .map(|balances| balances.into_iter().map(Into::into).collect()),
-            rewards: value
-                .rewards
-                .map(|rewards| rewards.into_iter().map(Into::into).collect()),
-            loaded_addresses: LoadedAddresses::default(),
-            return_data: value.return_data,
-            compute_units_consumed: value.compute_units_consumed,
-            cost_units: value.cost_units,
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Conversions from protobuf structs to `solana-transaction-status` types
-// ---------------------------------------------------------------------------
-
-fn pubkey_from_vec(bytes: Vec<u8>) -> Result<Pubkey, ProtoDecodeError> {
-    let actual_len = bytes.len();
-    Pubkey::try_from(bytes).map_err(|_| ProtoDecodeError::InvalidPubkeyLength { actual_len })
-}
-
-impl From<ProtoReward> for Reward {
-    fn from(reward: ProtoReward) -> Self {
-        let commission = reward.commission.parse::<u8>().ok().or_else(|| {
-            reward
-                .commission_bps
-                .parse::<u16>()
-                .ok()
-                .and_then(|bps| u8::try_from(bps / 100).ok())
-        });
-        Self {
-            pubkey: reward.pubkey,
-            lamports: reward.lamports,
-            post_balance: reward.post_balance,
-            reward_type: match reward.reward_type {
-                1 => Some(RewardType::Fee),
-                2 => Some(RewardType::Rent),
-                3 => Some(RewardType::Staking),
-                4 => Some(RewardType::Voting),
-                _ => None,
-            },
-            commission,
-        }
-    }
-}
-
-impl From<ProtoInnerInstruction> for InnerInstruction {
-    fn from(value: ProtoInnerInstruction) -> Self {
-        Self {
-            instruction: CompiledInstruction {
-                program_id_index: value.program_id_index as u8,
-                accounts: value.accounts,
-                data: value.data,
-            },
-            stack_height: value.stack_height,
-        }
-    }
-}
-
-impl From<ProtoInnerInstructions> for InnerInstructions {
-    fn from(value: ProtoInnerInstructions) -> Self {
-        Self {
-            index: value.index as u8,
-            instructions: value.instructions.into_iter().map(Into::into).collect(),
-        }
-    }
-}
-
-impl From<ProtoTokenBalance> for TransactionTokenBalance {
-    fn from(value: ProtoTokenBalance) -> Self {
-        let ui_token_amount = value.ui_token_amount.unwrap_or_default();
-        let decimals = ui_token_amount.decimals as u8;
-        let ui_amount_string = if !ui_token_amount.ui_amount_string.is_empty() {
-            ui_token_amount.ui_amount_string
-        } else {
-            real_number_string_trimmed(
-                u64::from_str(&ui_token_amount.amount).unwrap_or(0),
-                decimals,
-            )
-        };
-        Self {
-            account_index: value.account_index as u8,
-            mint: value.mint,
-            ui_token_amount: UiTokenAmount {
-                ui_amount: if (ui_token_amount.ui_amount - f64::default()).abs() > f64::EPSILON {
-                    Some(ui_token_amount.ui_amount)
-                } else {
-                    None
-                },
-                decimals,
-                amount: ui_token_amount.amount,
-                ui_amount_string,
-            },
-            owner: value.owner,
-            program_id: value.program_id,
-        }
-    }
-}
-
-impl TryFrom<ProtoReturnData> for TransactionReturnData {
-    type Error = ProtoDecodeError;
-
-    fn try_from(value: ProtoReturnData) -> Result<Self, Self::Error> {
-        Ok(Self {
-            program_id: pubkey_from_vec(value.program_id)?,
-            data: value.data,
-        })
-    }
-}
-
-impl TryFrom<ProtoTransactionStatusMeta> for TransactionStatusMeta {
-    type Error = ProtoDecodeError;
-
-    fn try_from(value: ProtoTransactionStatusMeta) -> Result<Self, Self::Error> {
-        let status = match value.err {
-            None => Ok(()),
-            Some(tx_err) => {
-                let err: TransactionError = bincode::deserialize(&tx_err.err)
-                    .map_err(|e| ProtoDecodeError::TransactionErrorBincode(e.to_string()))?;
-                Err(err)
+    fn varint(&mut self) -> PResult<u64> {
+        let mut x: u64 = 0;
+        for i in 0..10 {
+            let Some(&b) = self.buf.get(self.pos) else { return Err("truncated varint".into()) };
+            self.pos += 1;
+            if i == 9 && b > 1 {
+                return Err("invalid varint".into());
             }
-        };
+            x |= ((b & 0x7F) as u64) << (7 * i);
+            if b < 0x80 {
+                return Ok(x);
+            }
+        }
+        Err("invalid varint".into())
+    }
 
-        let inner_instructions = if value.inner_instructions_none {
-            None
-        } else {
-            Some(
-                value
-                    .inner_instructions
-                    .into_iter()
-                    .map(Into::into)
-                    .collect(),
-            )
-        };
+    fn key(&mut self) -> PResult<(u32, u8)> {
+        let k = self.varint()?;
+        if k > u32::MAX as u64 {
+            return Err(format!("invalid key value: {k}"));
+        }
+        let wire = (k & 7) as u8;
+        if wire > 5 {
+            return Err(format!("invalid wire type value: {wire}"));
+        }
+        let field = (k >> 3) as u32;
+        if field == 0 {
+            return Err("invalid tag value: 0".into());
+        }
+        Ok((field, wire))
+    }
 
-        let log_messages = if value.log_messages_none {
-            None
-        } else {
-            Some(value.log_messages)
-        };
+    fn fixed<const N: usize>(&mut self) -> PResult<[u8; N]> {
+        if N > self.buf.len() - self.pos {
+            return Err("buffer underflow".into());
+        }
+        let mut a = [0u8; N];
+        a.copy_from_slice(&self.buf[self.pos..self.pos + N]);
+        self.pos += N;
+        Ok(a)
+    }
 
-        let pre_token_balances = Some(
-            value
-                .pre_token_balances
-                .into_iter()
-                .map(Into::into)
-                .collect(),
-        );
-        let post_token_balances = Some(
-            value
-                .post_token_balances
-                .into_iter()
-                .map(Into::into)
-                .collect(),
-        );
-        let rewards = Some(value.rewards.into_iter().map(Into::into).collect());
+    fn len_delimited(&mut self) -> PResult<&'a [u8]> {
+        let n = self.varint()?;
+        if n > (self.buf.len() - self.pos) as u64 {
+            return Err("buffer underflow".into());
+        }
+        let s = &self.buf[self.pos..self.pos + n as usize];
+        self.pos += n as usize;
+        Ok(s)
+    }
 
-        let loaded_addresses = LoadedAddresses {
-            writable: value
-                .loaded_writable_addresses
-                .into_iter()
-                .map(pubkey_from_vec)
-                .collect::<Result<Vec<_>, _>>()?,
-            readonly: value
-                .loaded_readonly_addresses
-                .into_iter()
-                .map(pubkey_from_vec)
-                .collect::<Result<Vec<_>, _>>()?,
-        };
-
-        let return_data = if value.return_data_none {
-            None
-        } else {
-            value
-                .return_data
-                .map(TransactionReturnData::try_from)
-                .transpose()?
-        };
-
-        Ok(Self {
-            status,
-            fee: value.fee,
-            pre_balances: value.pre_balances,
-            post_balances: value.post_balances,
-            inner_instructions,
-            log_messages,
-            pre_token_balances,
-            post_token_balances,
-            rewards,
-            loaded_addresses,
-            return_data,
-            compute_units_consumed: value.compute_units_consumed,
-            cost_units: value.cost_units,
-        })
+    fn skip(&mut self, field: u32, wire: u8, depth: u32) -> PResult<()> {
+        match wire {
+            VARINT => {
+                self.varint()?;
+            }
+            I64 => {
+                self.fixed::<8>()?;
+            }
+            LEN => {
+                self.len_delimited()?;
+            }
+            I32 => {
+                self.fixed::<4>()?;
+            }
+            SGROUP => {
+                if depth >= RECURSION_LIMIT {
+                    return Err("recursion limit reached".into());
+                }
+                loop {
+                    if self.done() {
+                        return Err("unexpected end of group".into());
+                    }
+                    let (f, w) = self.key()?;
+                    if w == EGROUP {
+                        if f != field {
+                            return Err("unexpected end group tag".into());
+                        }
+                        break;
+                    }
+                    self.skip(f, w, depth + 1)?;
+                }
+            }
+            _ => return Err("unexpected end group tag".into()),
+        }
+        Ok(())
     }
 }
 
-/// Format an integer token amount with `decimals` decimal places, trimming trailing zeros
-/// (matches `solana_account_decoder::parse_token::real_number_string_trimmed` and safely
-/// handles all `decimals: u8` values `0..=255` without `10u64.pow` overflow).
-pub(crate) fn real_number_string_trimmed(amount: u64, decimals: u8) -> String {
-    if decimals == 0 {
-        return amount.to_string();
-    }
-    let digits = amount.to_string();
-    let dec = usize::from(decimals);
-    let mut s = if digits.len() <= dec {
-        format!("0.{:0>width$}", digits, width = dec)
+fn expect(wire: u8, want: u8, field: u32) -> PResult<()> {
+    if wire == want {
+        Ok(())
     } else {
-        let split = digits.len() - dec;
-        format!("{}.{}", &digits[..split], &digits[split..])
-    };
-    let trimmed = s.trim_end_matches('0').trim_end_matches('.');
-    s.truncate(trimmed.len());
-    s
-}
-
-// ---------------------------------------------------------------------------
-// Public entry points (zstd + Epoch 157 split)
-// ---------------------------------------------------------------------------
-
-/// Decompress a zstd-compressed slice into a `Vec<u8>`, enforcing [`MAX_DECOMPRESSED_BYTES`].
-pub fn decompress_zstd(data: &[u8]) -> Result<Vec<u8>, ProtoDecodeError> {
-    decompress_zstd_with_limit(data, MAX_DECOMPRESSED_BYTES)
-}
-
-/// Decompress a zstd-compressed slice with an explicit maximum output byte cap.
-pub(crate) fn decompress_zstd_with_limit(
-    data: &[u8],
-    max_bytes: usize,
-) -> Result<Vec<u8>, ProtoDecodeError> {
-    let decoder = zstd::Decoder::new(data).map_err(|e| ProtoDecodeError::Zstd(e.to_string()))?;
-    let mut limited = decoder.take((max_bytes as u64).saturating_add(1));
-    let mut out = Vec::new();
-    limited
-        .read_to_end(&mut out)
-        .map_err(|e| ProtoDecodeError::Zstd(e.to_string()))?;
-    if out.len() > max_bytes {
-        return Err(ProtoDecodeError::Zstd(format!(
-            "decompressed payload exceeds maximum allowed size ({max_bytes} bytes)"
-        )));
+        Err(format!("invalid wire type {wire} for field {field} (expected {want})"))
     }
-    Ok(out)
 }
 
-/// Returns `true` if the byte slice begins with the standard zstd frame magic (`0xFD2FB528` LE).
-#[inline]
-fn has_zstd_magic(data: &[u8]) -> bool {
-    data.len() >= 4 && data[0..4] == [0x28, 0xB5, 0x2F, 0xFD]
+fn read_string(r: &mut Reader<'_>, wire: u8, field: u32) -> PResult<String> {
+    expect(wire, LEN, field)?;
+    let b = r.len_delimited()?;
+    std::str::from_utf8(b).map(str::to_owned).map_err(|_| "invalid string value: data is not UTF-8 encoded".into())
 }
 
-/// Decode a reassembled transaction metadata `DataFrame` payload (possibly zstd-compressed).
-///
-/// Returns `Ok(None)` when `frame_bytes` is empty (very early genesis slots without metadata).
-pub fn decode_transaction_status_meta_frame(
-    slot: u64,
-    frame_bytes: &[u8],
-) -> Result<Option<TransactionStatusMeta>, ProtoDecodeError> {
-    if frame_bytes.is_empty() {
-        return Ok(None);
-    }
+fn read_bytes(r: &mut Reader<'_>, wire: u8, field: u32) -> PResult<Vec<u8>> {
+    expect(wire, LEN, field)?;
+    Ok(r.len_delimited()?.to_vec())
+}
 
-    if has_zstd_magic(frame_bytes) {
-        match decompress_zstd(frame_bytes) {
-            Ok(decompressed) => {
-                return decode_transaction_status_meta_bytes(slot, &decompressed).map(Some);
-            }
-            Err(zstd_err) => {
-                // Fall back to raw decode in case non-zstd bytes happened to start with magic.
-                return decode_transaction_status_meta_bytes(slot, frame_bytes)
-                    .map(Some)
-                    .map_err(|raw_err| ProtoDecodeError::TransactionMeta {
-                        slot,
-                        reason: format!("zstd failed ({zstd_err}); raw decode failed ({raw_err})"),
-                    });
+fn read_varint(r: &mut Reader<'_>, wire: u8, field: u32) -> PResult<u64> {
+    expect(wire, VARINT, field)?;
+    r.varint()
+}
+
+/// Repeated `uint64`, packed (wire type 2) or unpacked (wire type 0).
+fn read_repeated_u64(r: &mut Reader<'_>, wire: u8, field: u32, out: &mut Vec<u64>) -> PResult<()> {
+    match wire {
+        VARINT => out.push(r.varint()?),
+        LEN => {
+            let mut inner = Reader::new(r.len_delimited()?);
+            while !inner.done() {
+                out.push(inner.varint()?);
             }
         }
+        _ => return Err(format!("invalid wire type {wire} for packed field {field}")),
     }
+    Ok(())
+}
 
-    // Not starting with zstd magic: try raw first, then zstd as last resort.
-    match decode_transaction_status_meta_bytes(slot, frame_bytes) {
-        Ok(meta) => Ok(Some(meta)),
-        Err(raw_err) => match decompress_zstd(frame_bytes) {
-            Ok(decompressed) => decode_transaction_status_meta_bytes(slot, &decompressed).map(Some),
-            Err(_) => Err(raw_err),
-        },
+/// Parse a nested message by merging into `msg` (prost semantics for repeated occurrences).
+fn merge_message<T>(
+    r: &mut Reader<'_>,
+    wire: u8,
+    field: u32,
+    depth: u32,
+    msg: &mut T,
+    f: fn(&mut T, &mut Reader<'_>, u32) -> PResult<()>,
+) -> PResult<()> {
+    expect(wire, LEN, field)?;
+    if depth >= RECURSION_LIMIT {
+        return Err("recursion limit reached".into());
     }
+    let mut inner = Reader::new(r.len_delimited()?);
+    f(msg, &mut inner, depth + 1)
 }
 
-/// Pre-Solana v1.14.6 `InnerInstructions` bincode layout (before `stack_height: Option<u32>`
-/// was added to `InnerInstruction`).
-#[derive(Deserialize)]
-struct LegacyInnerInstructions {
-    index: u8,
-    instructions: Vec<CompiledInstruction>,
-}
+// ------------------------------------------------------------------------------------
+// Raw protobuf messages
+// ------------------------------------------------------------------------------------
 
-impl From<LegacyInnerInstructions> for InnerInstructions {
-    fn from(value: LegacyInnerInstructions) -> Self {
-        Self {
-            index: value.index,
-            instructions: value
-                .instructions
-                .into_iter()
-                .map(|instruction| InnerInstruction {
-                    instruction,
-                    stack_height: None,
-                })
-                .collect(),
-        }
-    }
-}
-
-/// Pre-Solana v1.6 token balance bincode layout (no `owner` or `program_id` fields).
-#[derive(Deserialize)]
-struct LegacyTokenBalanceV1 {
-    account_index: u8,
-    mint: String,
-    ui_token_amount: StoredTokenAmount,
-}
-
-impl From<LegacyTokenBalanceV1> for TransactionTokenBalance {
-    fn from(value: LegacyTokenBalanceV1) -> Self {
-        Self {
-            account_index: value.account_index,
-            mint: value.mint,
-            ui_token_amount: value.ui_token_amount.into(),
-            owner: String::new(),
-            program_id: String::new(),
-        }
-    }
-}
-
-/// Solana v1.6–v1.9 token balance bincode layout (`owner` present, no `program_id`).
-#[derive(Deserialize)]
-struct LegacyTokenBalanceV2 {
-    account_index: u8,
-    mint: String,
-    ui_token_amount: StoredTokenAmount,
-    owner: String,
-}
-
-impl From<LegacyTokenBalanceV2> for TransactionTokenBalance {
-    fn from(value: LegacyTokenBalanceV2) -> Self {
-        Self {
-            account_index: value.account_index,
-            mint: value.mint,
-            ui_token_amount: value.ui_token_amount.into(),
-            owner: value.owner,
-            program_id: String::new(),
-        }
-    }
-}
-
-/// Parameterized legacy `StoredTransactionStatusMeta` for historical bincode formats
-/// written before Solana v1.14.6 (where `InnerInstruction` had no `stack_height` field, and
-/// earlier token balances omitted `owner` and/or `program_id`).
-#[derive(Deserialize)]
-#[serde(bound(deserialize = "TB: Deserialize<'de>"))]
-struct LegacyStoredTransactionStatusMeta<TB> {
-    status: TransactionResult<()>,
+#[derive(Default)]
+struct PbMeta {
+    err: Option<Vec<u8>>,
     fee: u64,
     pre_balances: Vec<u64>,
     post_balances: Vec<u64>,
-    #[serde(deserialize_with = "default_on_eof")]
-    inner_instructions: Option<Vec<LegacyInnerInstructions>>,
-    #[serde(deserialize_with = "default_on_eof")]
-    log_messages: Option<Vec<String>>,
-    #[serde(deserialize_with = "default_on_eof")]
-    pre_token_balances: Option<Vec<TB>>,
-    #[serde(deserialize_with = "default_on_eof")]
-    post_token_balances: Option<Vec<TB>>,
-    #[serde(deserialize_with = "default_on_eof")]
-    rewards: Option<Vec<StoredExtendedReward>>,
-    #[serde(deserialize_with = "default_on_eof")]
-    return_data: Option<TransactionReturnData>,
-    #[serde(deserialize_with = "default_on_eof")]
+    inner_instructions: Vec<PbInnerInstructions>,
+    log_messages: Vec<String>,
+    pre_token_balances: Vec<PbTokenBalance>,
+    post_token_balances: Vec<PbTokenBalance>,
+    rewards: Vec<PbReward>,
+    inner_instructions_none: bool,
+    log_messages_none: bool,
+    loaded_writable: Vec<Vec<u8>>,
+    loaded_readonly: Vec<Vec<u8>>,
+    return_data: Option<PbReturnData>,
+    return_data_none: bool,
     compute_units_consumed: Option<u64>,
-    #[serde(deserialize_with = "default_on_eof")]
     cost_units: Option<u64>,
 }
 
-impl<TB: Into<TransactionTokenBalance>> From<LegacyStoredTransactionStatusMeta<TB>>
-    for TransactionStatusMeta
-{
-    fn from(value: LegacyStoredTransactionStatusMeta<TB>) -> Self {
-        Self {
-            status: value.status,
-            fee: value.fee,
-            pre_balances: value.pre_balances,
-            post_balances: value.post_balances,
-            inner_instructions: value
-                .inner_instructions
-                .map(|ixs| ixs.into_iter().map(Into::into).collect()),
-            log_messages: value.log_messages,
-            pre_token_balances: value
-                .pre_token_balances
-                .map(|balances| balances.into_iter().map(Into::into).collect()),
-            post_token_balances: value
-                .post_token_balances
-                .map(|balances| balances.into_iter().map(Into::into).collect()),
-            rewards: value
-                .rewards
-                .map(|rewards| rewards.into_iter().map(Into::into).collect()),
-            loaded_addresses: LoadedAddresses::default(),
-            return_data: value.return_data,
-            compute_units_consumed: value.compute_units_consumed,
-            cost_units: value.cost_units,
-        }
-    }
+#[derive(Default)]
+struct PbInnerInstructions {
+    index: u32,
+    instructions: Vec<PbInnerInstruction>,
 }
 
-/// Try decoding bincode `TransactionStatusMeta` across all historical Solana bincode layouts,
-/// requiring exact buffer consumption (`reject_trailing_bytes`) so an older layout cannot
-/// accidentally truncate newer fields.
-fn deserialize_bincode_meta(bytes: &[u8]) -> Result<TransactionStatusMeta, String> {
-    let strict = bincode::DefaultOptions::new()
-        .with_fixint_encoding()
-        .reject_trailing_bytes();
-
-    if let Ok(m) = strict.deserialize::<StoredTransactionStatusMeta>(bytes) {
-        return Ok(m.into());
-    }
-    if let Ok(m) =
-        strict.deserialize::<LegacyStoredTransactionStatusMeta<LegacyTokenBalanceV1>>(bytes)
-    {
-        return Ok(m.into());
-    }
-    if let Ok(m) =
-        strict.deserialize::<LegacyStoredTransactionStatusMeta<LegacyTokenBalanceV2>>(bytes)
-    {
-        return Ok(m.into());
-    }
-    if let Ok(m) = strict
-        .deserialize::<LegacyStoredTransactionStatusMeta<StoredTransactionTokenBalance>>(bytes)
-    {
-        return Ok(m.into());
-    }
-
-    // Final attempt with default bincode options to return the most informative error.
-    bincode::deserialize::<StoredTransactionStatusMeta>(bytes)
-        .map(Into::into)
-        .map_err(|e| e.to_string())
+#[derive(Default)]
+struct PbInnerInstruction {
+    program_id_index: u32,
+    accounts: Vec<u8>,
+    data: Vec<u8>,
+    stack_height: Option<u32>,
 }
 
-/// Decode uncompressed `TransactionStatusMeta` bytes respecting the Epoch 157 bincode/protobuf split.
-pub fn decode_transaction_status_meta_bytes(
-    slot: u64,
-    bytes: &[u8],
-) -> Result<TransactionStatusMeta, ProtoDecodeError> {
-    if slot < BINCODE_SLOT_CUTOFF {
-        match deserialize_bincode_meta(bytes) {
-            Ok(meta) => return Ok(meta),
-            Err(bin_err) => {
-                // Fallback to protobuf if a pre-157 archive slot was stored in protobuf.
-                return ProtoTransactionStatusMeta::decode(bytes)
-                    .map_err(|proto_err| ProtoDecodeError::TransactionMeta {
-                        slot,
-                        reason: format!(
-                            "bincode failed ({bin_err}); protobuf failed ({proto_err})"
-                        ),
-                    })?
-                    .try_into();
-            }
-        }
-    }
-
-    match ProtoTransactionStatusMeta::decode(bytes) {
-        Ok(proto) => proto.try_into(),
-        Err(proto_err) => {
-            // Fallback to bincode just in case.
-            deserialize_bincode_meta(bytes).map_err(|bin_err| ProtoDecodeError::TransactionMeta {
-                slot,
-                reason: format!("protobuf failed ({proto_err}); bincode failed ({bin_err})"),
-            })
-        }
-    }
+#[derive(Default)]
+struct PbTokenBalance {
+    account_index: u32,
+    mint: String,
+    ui_token_amount: Option<PbUiTokenAmount>,
+    owner: String,
+    program_id: String,
 }
 
-/// Decode a reassembled `Rewards` `DataFrame` payload (possibly zstd-compressed).
-pub fn decode_rewards_frame(
-    slot: u64,
-    frame_bytes: &[u8],
-) -> Result<DecodedRewards, ProtoDecodeError> {
-    if frame_bytes.is_empty() {
-        return Ok(DecodedRewards::default());
-    }
-
-    if has_zstd_magic(frame_bytes) {
-        match decompress_zstd(frame_bytes) {
-            Ok(decompressed) => return decode_rewards_bytes(slot, &decompressed),
-            Err(zstd_err) => {
-                return decode_rewards_bytes(slot, frame_bytes).map_err(|raw_err| {
-                    ProtoDecodeError::Rewards {
-                        slot,
-                        reason: format!("zstd failed ({zstd_err}); raw decode failed ({raw_err})"),
-                    }
-                });
-            }
-        }
-    }
-
-    match decode_rewards_bytes(slot, frame_bytes) {
-        Ok(rewards) => Ok(rewards),
-        Err(raw_err) => match decompress_zstd(frame_bytes) {
-            Ok(decompressed) => decode_rewards_bytes(slot, &decompressed),
-            Err(_) => Err(raw_err),
-        },
-    }
+#[derive(Default)]
+struct PbUiTokenAmount {
+    ui_amount: f64,
+    decimals: u32,
+    amount: String,
+    ui_amount_string: String,
 }
 
-/// Pre-Solana v1.5 reward bincode layout (before `commission: Option<u8>` was added).
-#[derive(Deserialize)]
-struct LegacyStoredRewardNoCommission {
+#[derive(Default)]
+struct PbReturnData {
+    program_id: Vec<u8>,
+    data: Vec<u8>,
+}
+
+#[derive(Default)]
+struct PbReward {
     pubkey: String,
     lamports: i64,
     post_balance: u64,
-    reward_type: Option<RewardType>,
+    reward_type: i32,
+    commission: String,
+    commission_bps: String,
 }
 
-impl From<LegacyStoredRewardNoCommission> for Reward {
-    fn from(value: LegacyStoredRewardNoCommission) -> Self {
-        Self {
-            pubkey: value.pubkey,
-            lamports: value.lamports,
-            post_balance: value.post_balance,
-            reward_type: value.reward_type,
-            commission: None,
+#[derive(Default)]
+struct PbRewards {
+    rewards: Vec<PbReward>,
+    num_partitions: Option<u64>,
+}
+
+/// Iterate a message's fields, dispatching known ones to `known` (which returns `false` for
+/// unknown field numbers so they get skipped).
+fn fields(r: &mut Reader<'_>, depth: u32, mut known: impl FnMut(&mut Reader<'_>, u32, u8) -> PResult<bool>) -> PResult<()> {
+    while !r.done() {
+        let (field, wire) = r.key()?;
+        if !known(r, field, wire)? {
+            r.skip(field, wire, depth)?;
         }
     }
+    Ok(())
 }
 
-fn deserialize_bincode_rewards(bytes: &[u8]) -> Result<DecodedRewards, String> {
-    let strict = bincode::DefaultOptions::new()
-        .with_fixint_encoding()
-        .reject_trailing_bytes();
-
-    if let Ok(stored) = strict.deserialize::<StoredExtendedRewards>(bytes) {
-        return Ok(DecodedRewards {
-            rewards: stored.into_iter().map(Into::into).collect(),
-            num_partitions: None,
-        });
-    }
-    if let Ok(stored) = strict.deserialize::<Vec<LegacyStoredRewardNoCommission>>(bytes) {
-        return Ok(DecodedRewards {
-            rewards: stored.into_iter().map(Into::into).collect(),
-            num_partitions: None,
-        });
-    }
-
-    bincode::deserialize::<StoredExtendedRewards>(bytes)
-        .map(|stored| DecodedRewards {
-            rewards: stored.into_iter().map(Into::into).collect(),
-            num_partitions: None,
-        })
-        .map_err(|e| e.to_string())
-}
-
-/// Decode uncompressed `Rewards` bytes respecting the Epoch 157 bincode/protobuf split.
-pub fn decode_rewards_bytes(slot: u64, bytes: &[u8]) -> Result<DecodedRewards, ProtoDecodeError> {
-    if slot < BINCODE_SLOT_CUTOFF {
-        match deserialize_bincode_rewards(bytes) {
-            Ok(decoded) => return Ok(decoded),
-            Err(bin_err) => {
-                let proto =
-                    ProtoRewards::decode(bytes).map_err(|proto_err| ProtoDecodeError::Rewards {
-                        slot,
-                        reason: format!(
-                            "bincode failed ({bin_err}); protobuf failed ({proto_err})"
-                        ),
-                    })?;
-                return Ok(DecodedRewards {
-                    rewards: proto.rewards.into_iter().map(Into::into).collect(),
-                    num_partitions: proto.num_partitions.map(|p| p.num_partitions),
-                });
+fn parse_meta(m: &mut PbMeta, r: &mut Reader<'_>, depth: u32) -> PResult<()> {
+    fields(r, depth, |r, field, wire| {
+        match field {
+            1 => {
+                // TransactionError { bytes err = 1 }: merge semantics.
+                let mut err = m.err.take().unwrap_or_default();
+                merge_message(r, wire, field, depth, &mut err, |e, r, depth| {
+                    fields(r, depth, |r, f, w| {
+                        if f == 1 {
+                            *e = read_bytes(r, w, f)?;
+                            Ok(true)
+                        } else {
+                            Ok(false)
+                        }
+                    })
+                })?;
+                m.err = Some(err);
             }
+            2 => m.fee = read_varint(r, wire, field)?,
+            3 => read_repeated_u64(r, wire, field, &mut m.pre_balances)?,
+            4 => read_repeated_u64(r, wire, field, &mut m.post_balances)?,
+            5 => {
+                let mut ii = PbInnerInstructions::default();
+                merge_message(r, wire, field, depth, &mut ii, parse_inner_instructions)?;
+                m.inner_instructions.push(ii);
+            }
+            6 => m.log_messages.push(read_string(r, wire, field)?),
+            7 => {
+                let mut tb = PbTokenBalance::default();
+                merge_message(r, wire, field, depth, &mut tb, parse_token_balance)?;
+                m.pre_token_balances.push(tb);
+            }
+            8 => {
+                let mut tb = PbTokenBalance::default();
+                merge_message(r, wire, field, depth, &mut tb, parse_token_balance)?;
+                m.post_token_balances.push(tb);
+            }
+            9 => {
+                let mut rw = PbReward::default();
+                merge_message(r, wire, field, depth, &mut rw, parse_reward)?;
+                m.rewards.push(rw);
+            }
+            10 => m.inner_instructions_none = read_varint(r, wire, field)? != 0,
+            11 => m.log_messages_none = read_varint(r, wire, field)? != 0,
+            12 => m.loaded_writable.push(read_bytes(r, wire, field)?),
+            13 => m.loaded_readonly.push(read_bytes(r, wire, field)?),
+            14 => {
+                let mut rd = m.return_data.take().unwrap_or_default();
+                merge_message(r, wire, field, depth, &mut rd, |rd, r, depth| {
+                    fields(r, depth, |r, f, w| {
+                        match f {
+                            1 => rd.program_id = read_bytes(r, w, f)?,
+                            2 => rd.data = read_bytes(r, w, f)?,
+                            _ => return Ok(false),
+                        }
+                        Ok(true)
+                    })
+                })?;
+                m.return_data = Some(rd);
+            }
+            15 => m.return_data_none = read_varint(r, wire, field)? != 0,
+            16 => m.compute_units_consumed = Some(read_varint(r, wire, field)?),
+            17 => m.cost_units = Some(read_varint(r, wire, field)?),
+            _ => return Ok(false),
         }
-    }
+        Ok(true)
+    })
+}
 
-    match ProtoRewards::decode(bytes) {
-        Ok(proto) => Ok(DecodedRewards {
-            rewards: proto.rewards.into_iter().map(Into::into).collect(),
-            num_partitions: proto.num_partitions.map(|p| p.num_partitions),
-        }),
-        Err(proto_err) => {
-            deserialize_bincode_rewards(bytes).map_err(|bin_err| ProtoDecodeError::Rewards {
-                slot,
-                reason: format!("protobuf failed ({proto_err}); bincode failed ({bin_err})"),
-            })
+fn parse_inner_instructions(ii: &mut PbInnerInstructions, r: &mut Reader<'_>, depth: u32) -> PResult<()> {
+    fields(r, depth, |r, field, wire| {
+        match field {
+            1 => ii.index = read_varint(r, wire, field)? as u32,
+            2 => {
+                let mut ix = PbInnerInstruction::default();
+                merge_message(r, wire, field, depth, &mut ix, |ix, r, depth| {
+                    fields(r, depth, |r, f, w| {
+                        match f {
+                            1 => ix.program_id_index = read_varint(r, w, f)? as u32,
+                            2 => ix.accounts = read_bytes(r, w, f)?,
+                            3 => ix.data = read_bytes(r, w, f)?,
+                            4 => ix.stack_height = Some(read_varint(r, w, f)? as u32),
+                            _ => return Ok(false),
+                        }
+                        Ok(true)
+                    })
+                })?;
+                ii.instructions.push(ix);
+            }
+            _ => return Ok(false),
         }
+        Ok(true)
+    })
+}
+
+fn parse_token_balance(tb: &mut PbTokenBalance, r: &mut Reader<'_>, depth: u32) -> PResult<()> {
+    fields(r, depth, |r, field, wire| {
+        match field {
+            1 => tb.account_index = read_varint(r, wire, field)? as u32,
+            2 => tb.mint = read_string(r, wire, field)?,
+            3 => {
+                let mut amt = tb.ui_token_amount.take().unwrap_or_default();
+                merge_message(r, wire, field, depth, &mut amt, |a, r, depth| {
+                    fields(r, depth, |r, f, w| {
+                        match f {
+                            1 => {
+                                expect(w, I64, f)?;
+                                a.ui_amount = f64::from_le_bytes(r.fixed::<8>()?);
+                            }
+                            2 => a.decimals = read_varint(r, w, f)? as u32,
+                            3 => a.amount = read_string(r, w, f)?,
+                            4 => a.ui_amount_string = read_string(r, w, f)?,
+                            _ => return Ok(false),
+                        }
+                        Ok(true)
+                    })
+                })?;
+                tb.ui_token_amount = Some(amt);
+            }
+            4 => tb.owner = read_string(r, wire, field)?,
+            5 => tb.program_id = read_string(r, wire, field)?,
+            _ => return Ok(false),
+        }
+        Ok(true)
+    })
+}
+
+fn parse_reward(rw: &mut PbReward, r: &mut Reader<'_>, depth: u32) -> PResult<()> {
+    fields(r, depth, |r, field, wire| {
+        match field {
+            1 => rw.pubkey = read_string(r, wire, field)?,
+            2 => rw.lamports = read_varint(r, wire, field)? as i64,
+            3 => rw.post_balance = read_varint(r, wire, field)?,
+            4 => rw.reward_type = read_varint(r, wire, field)? as i32,
+            5 => rw.commission = read_string(r, wire, field)?,
+            6 => rw.commission_bps = read_string(r, wire, field)?,
+            _ => return Ok(false),
+        }
+        Ok(true)
+    })
+}
+
+fn parse_rewards_msg(rs: &mut PbRewards, r: &mut Reader<'_>, depth: u32) -> PResult<()> {
+    fields(r, depth, |r, field, wire| {
+        match field {
+            1 => {
+                let mut rw = PbReward::default();
+                merge_message(r, wire, field, depth, &mut rw, parse_reward)?;
+                rs.rewards.push(rw);
+            }
+            2 => {
+                let mut n = rs.num_partitions.unwrap_or(0);
+                merge_message(r, wire, field, depth, &mut n, |n, r, depth| {
+                    fields(r, depth, |r, f, w| {
+                        if f == 1 {
+                            *n = read_varint(r, w, f)?;
+                            Ok(true)
+                        } else {
+                            Ok(false)
+                        }
+                    })
+                })?;
+                rs.num_partitions = Some(n);
+            }
+            _ => return Ok(false),
+        }
+        Ok(true)
+    })
+}
+
+// ------------------------------------------------------------------------------------
+// Conversion to the internal model (§10.3)
+// ------------------------------------------------------------------------------------
+
+fn convert_reward(r: PbReward) -> Reward {
+    let commission = parse_unsigned(&r.commission, u8::MAX as u64).map(|v| v as u8).or_else(|| {
+        parse_unsigned(&r.commission_bps, u16::MAX as u64).and_then(|bps| u8::try_from(bps / 100).ok())
+    });
+    Reward {
+        pubkey: r.pubkey,
+        lamports: r.lamports,
+        post_balance: r.post_balance,
+        reward_type: matches!(r.reward_type, 1..=4).then_some(r.reward_type as u8),
+        commission,
     }
+}
+
+fn convert_token_balance(tb: PbTokenBalance) -> TokenBalance {
+    let amt = tb.ui_token_amount.unwrap_or_default();
+    let decimals = amt.decimals as u8;
+    let ui_amount = ((amt.ui_amount - 0.0).abs() > f64::EPSILON).then_some(amt.ui_amount);
+    let ui_amount_string = if amt.ui_amount_string.is_empty() {
+        real_number_string_trimmed(parse_unsigned(&amt.amount, u64::MAX).unwrap_or(0), decimals)
+    } else {
+        amt.ui_amount_string
+    };
+    TokenBalance {
+        account_index: tb.account_index as u8,
+        mint: tb.mint,
+        owner: tb.owner,
+        program_id: tb.program_id,
+        ui_amount,
+        decimals,
+        amount: amt.amount,
+        ui_amount_string,
+    }
+}
+
+fn pubkey(bytes: Vec<u8>, what: &str) -> DResult<Pubkey> {
+    let len = bytes.len();
+    bytes.try_into().map_err(|_| DecodeError(format!("{what} must be 32 bytes, got {len}")))
+}
+
+/// Parse a protobuf `TransactionStatusMeta`. `Err(Ok(..))`-style layering: the outer error is a
+/// protobuf *parse* failure (callers may fall back to bincode), the inner one a conversion
+/// failure (final).
+pub fn parse_transaction_status_meta(bytes: &[u8]) -> Result<DResult<Meta>, String> {
+    let mut m = PbMeta::default();
+    parse_meta(&mut m, &mut Reader::new(bytes), 0)?;
+    Ok(convert_meta(m))
+}
+
+fn convert_meta(m: PbMeta) -> DResult<Meta> {
+    let status = match m.err {
+        None => None,
+        Some(err) => Some(
+            bincode::transaction_error_lenient(&err)
+                .map_err(|e| DecodeError(format!("failed to deserialize bincode TransactionError: {e}")))?,
+        ),
+    };
+    let inner_instructions = (!m.inner_instructions_none).then(|| {
+        m.inner_instructions
+            .into_iter()
+            .map(|ii| InnerInstructions {
+                index: ii.index as u8,
+                instructions: ii
+                    .instructions
+                    .into_iter()
+                    .map(|ix| InnerInstruction {
+                        program_id_index: ix.program_id_index as u8,
+                        accounts: ix.accounts,
+                        data: ix.data,
+                        stack_height: ix.stack_height,
+                    })
+                    .collect(),
+            })
+            .collect()
+    });
+    let log_messages = (!m.log_messages_none).then_some(m.log_messages);
+    let loaded_writable = m.loaded_writable.into_iter().map(|b| pubkey(b, "loaded address")).collect::<DResult<_>>()?;
+    let loaded_readonly = m.loaded_readonly.into_iter().map(|b| pubkey(b, "loaded address")).collect::<DResult<_>>()?;
+    let return_data = if m.return_data_none {
+        None
+    } else {
+        match m.return_data {
+            Some(rd) => Some(ReturnData { program_id: pubkey(rd.program_id, "return data program id")?, data: rd.data }),
+            None => None,
+        }
+    };
+    Ok(Meta {
+        status,
+        fee: m.fee,
+        pre_balances: m.pre_balances,
+        post_balances: m.post_balances,
+        inner_instructions,
+        log_messages,
+        pre_token_balances: Some(m.pre_token_balances.into_iter().map(convert_token_balance).collect()),
+        post_token_balances: Some(m.post_token_balances.into_iter().map(convert_token_balance).collect()),
+        rewards: Some(m.rewards.into_iter().map(convert_reward).collect()),
+        loaded_writable,
+        loaded_readonly,
+        return_data,
+        compute_units_consumed: m.compute_units_consumed,
+        cost_units: m.cost_units,
+    })
+}
+
+/// Parse a protobuf `Rewards` message.
+pub fn parse_rewards(bytes: &[u8]) -> Result<BlockRewards, String> {
+    let mut rs = PbRewards::default();
+    parse_rewards_msg(&mut rs, &mut Reader::new(bytes), 0)?;
+    Ok(BlockRewards { rewards: rs.rewards.into_iter().map(convert_reward).collect(), num_partitions: rs.num_partitions })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn zstd_compress(data: &[u8]) -> Vec<u8> {
-        zstd::encode_all(data, 1).expect("zstd compress")
+    #[test]
+    fn packed_and_unpacked_balances_mix() {
+        // field 3 packed [50000, 1], then field 3 unpacked 7
+        let bytes = [0x1a, 0x04, 0xd0, 0x86, 0x03, 0x01, 0x18, 0x07, 0x10, 0x88, 0x27];
+        let meta = parse_transaction_status_meta(&bytes).unwrap().unwrap();
+        assert_eq!(meta.pre_balances, vec![50000, 1, 7]);
+        assert_eq!(meta.fee, 5000);
+        assert_eq!(meta.rewards, Some(vec![]));
+        assert_eq!(meta.inner_instructions, Some(vec![]));
     }
 
     #[test]
-    fn decodes_pre_epoch_157_bincode_meta_raw_and_zstd() {
-        let stored = StoredTransactionStatusMeta {
-            status: Ok(()),
-            fee: 5_000,
-            pre_balances: vec![100_000, 200_000],
-            post_balances: vec![95_000, 200_000],
-            inner_instructions: None,
-            log_messages: Some(vec!["Program log: ok".to_string()]),
-            pre_token_balances: Some(vec![]),
-            post_token_balances: Some(vec![]),
-            rewards: Some(vec![]),
-            return_data: None,
-            compute_units_consumed: Some(1_234),
-            cost_units: None,
-        };
-        let raw = bincode::serialize(&stored).expect("bincode serialize");
-        let compressed = zstd_compress(&raw);
-
-        let decoded_raw = decode_transaction_status_meta_frame(43_200_000, &raw)
-            .expect("decode raw")
-            .expect("some meta");
-        assert_eq!(decoded_raw.fee, 5_000);
-        assert_eq!(decoded_raw.compute_units_consumed, Some(1_234));
-
-        let decoded_zstd = decode_transaction_status_meta_frame(43_200_000, &compressed)
-            .expect("decode zstd")
-            .expect("some meta");
-        assert_eq!(decoded_zstd, decoded_raw);
+    fn wrong_wire_type_and_truncation_fail() {
+        assert!(parse_transaction_status_meta(&[0x11, 0, 0, 0, 0, 0, 0, 0, 0]).is_err()); // fee as I64
+        assert!(parse_transaction_status_meta(&[0x32, 0x05, b'a']).is_err());
+        assert!(parse_transaction_status_meta(&[0x32, 0x01, 0xff]).is_err()); // invalid UTF-8
+        assert!(parse_transaction_status_meta(&[0x00]).is_err()); // field 0
+        // unknown fields of every wire type are skipped, including groups
+        let ok = [0xf8, 0x01, 0x05, 0xfa, 0x01, 0x01, 0x00, 0xfd, 0x01, 1, 2, 3, 4, 0xfb, 0x01, 0x08, 0x01, 0xfc, 0x01];
+        assert!(parse_transaction_status_meta(&ok).is_ok());
     }
 
     #[test]
-    fn decodes_modern_protobuf_meta_zstd() {
-        let proto = ProtoTransactionStatusMeta {
-            err: None,
-            fee: 10_000,
-            pre_balances: vec![50_000, 10_000],
-            post_balances: vec![40_000, 10_000],
-            inner_instructions: vec![],
-            inner_instructions_none: false,
-            log_messages: vec!["hello".to_string()],
-            log_messages_none: false,
-            pre_token_balances: vec![],
-            post_token_balances: vec![],
-            rewards: vec![],
-            loaded_writable_addresses: vec![],
-            loaded_readonly_addresses: vec![],
-            return_data: None,
-            return_data_none: true,
-            compute_units_consumed: Some(450),
-            cost_units: Some(900),
-        };
-        let encoded = proto.encode_to_vec();
-        let compressed = zstd_compress(&encoded);
-
-        let decoded = decode_transaction_status_meta_frame(302_400_001, &compressed)
-            .expect("decode proto")
-            .expect("some meta");
-        assert_eq!(decoded.fee, 10_000);
-        assert_eq!(decoded.log_messages, Some(vec!["hello".to_string()]));
-        assert_eq!(decoded.compute_units_consumed, Some(450));
-        assert_eq!(decoded.cost_units, Some(900));
-    }
-
-    #[test]
-    fn decodes_pre_epoch_157_bincode_rewards_and_modern_protobuf_rewards() {
-        let bincode_rewards: StoredExtendedRewards = vec![StoredExtendedReward {
-            pubkey: "11111111111111111111111111111111".to_string(),
-            lamports: 42,
-            post_balance: 1_042,
-            reward_type: Some(RewardType::Fee),
-            commission: None,
-        }];
-        let raw_bin = bincode::serialize(&bincode_rewards).expect("serialize");
-        let decoded_bin =
-            decode_rewards_frame(43_200_000, &zstd_compress(&raw_bin)).expect("decode bincode");
-        assert_eq!(decoded_bin.rewards.len(), 1);
-        assert_eq!(decoded_bin.rewards[0].lamports, 42);
-        assert_eq!(decoded_bin.num_partitions, None);
-
-        let proto_rewards = ProtoRewards {
-            rewards: vec![ProtoReward {
-                pubkey: "11111111111111111111111111111111".to_string(),
-                lamports: 100,
-                post_balance: 5_000,
-                reward_type: 3, // Staking
-                commission: "5".to_string(),
-                commission_bps: String::new(),
-            }],
-            num_partitions: Some(ProtoNumPartitions { num_partitions: 4 }),
-        };
-        let raw_proto = proto_rewards.encode_to_vec();
-        let decoded_proto =
-            decode_rewards_frame(302_400_000, &zstd_compress(&raw_proto)).expect("decode proto");
-        assert_eq!(decoded_proto.rewards.len(), 1);
-        assert_eq!(
-            decoded_proto.rewards[0].reward_type,
-            Some(RewardType::Staking)
-        );
-        assert_eq!(decoded_proto.rewards[0].commission, Some(5));
-        assert_eq!(decoded_proto.num_partitions, Some(4));
-    }
-
-    #[test]
-    fn empty_frames_return_none_and_empty_rewards() {
-        assert_eq!(
-            decode_transaction_status_meta_frame(1, &[]).expect("empty meta"),
-            None
-        );
-        let rewards = decode_rewards_frame(1, &[]).expect("empty rewards");
-        assert!(rewards.rewards.is_empty());
-        assert_eq!(rewards.num_partitions, None);
-    }
-
-    #[test]
-    fn decodes_legacy_bincode_meta_without_stack_height_or_token_owner() {
-        #[derive(Serialize)]
-        struct OldInnerInstructions {
-            index: u8,
-            instructions: Vec<CompiledInstruction>,
-        }
-        #[derive(Serialize)]
-        struct OldTokenBalance {
-            account_index: u8,
-            mint: String,
-            ui_token_amount: StoredTokenAmount,
-        }
-        #[derive(Serialize)]
-        struct OldMeta {
-            status: TransactionResult<()>,
-            fee: u64,
-            pre_balances: Vec<u64>,
-            post_balances: Vec<u64>,
-            inner_instructions: Option<Vec<OldInnerInstructions>>,
-            log_messages: Option<Vec<String>>,
-            pre_token_balances: Option<Vec<OldTokenBalance>>,
-            post_token_balances: Option<Vec<OldTokenBalance>>,
-        }
-
-        let old = OldMeta {
-            status: Ok(()),
-            fee: 5_000,
-            pre_balances: vec![10_000],
-            post_balances: vec![5_000],
-            inner_instructions: Some(vec![OldInnerInstructions {
-                index: 0,
-                instructions: vec![CompiledInstruction {
-                    program_id_index: 1,
-                    accounts: vec![0],
-                    data: vec![42, 43],
-                }],
-            }]),
-            log_messages: Some(vec!["legacy".to_string()]),
-            pre_token_balances: Some(vec![OldTokenBalance {
-                account_index: 0,
-                mint: "So11111111111111111111111111111111111111112".to_string(),
-                ui_token_amount: StoredTokenAmount {
-                    ui_amount: 1.5,
-                    decimals: 6,
-                    amount: "1500000".to_string(),
-                },
-            }]),
-            post_token_balances: Some(vec![]),
-        };
-        let bytes = bincode::serialize(&old).expect("serialize old meta");
-        let decoded =
-            decode_transaction_status_meta_bytes(43_200_000, &bytes).expect("decode legacy meta");
-        assert_eq!(decoded.fee, 5_000);
-        let ixs = decoded.inner_instructions.expect("inner ixs");
-        assert_eq!(ixs.len(), 1);
-        assert_eq!(ixs[0].instructions[0].stack_height, None);
-        assert_eq!(ixs[0].instructions[0].instruction.data, vec![42, 43]);
-        let pre_tb = decoded.pre_token_balances.expect("pre tb");
-        assert_eq!(pre_tb.len(), 1);
-        assert_eq!(pre_tb[0].ui_token_amount.ui_amount_string, "1.5");
-    }
-
-    #[test]
-    fn real_number_string_trimmed_matches_solana_formatting() {
-        assert_eq!(real_number_string_trimmed(1_000_000, 6), "1");
-        assert_eq!(real_number_string_trimmed(1_250_000, 6), "1.25");
-        assert_eq!(real_number_string_trimmed(5, 6), "0.000005");
-        assert_eq!(real_number_string_trimmed(0, 6), "0");
-        assert_eq!(real_number_string_trimmed(42, 0), "42");
-        // Decimals >= 20 must not overflow u64::pow.
-        assert_eq!(real_number_string_trimmed(1, 20), "0.00000000000000000001");
-        assert_eq!(real_number_string_trimmed(0, 255), "0");
-        assert_eq!(
-            real_number_string_trimmed(u64::MAX, 20),
-            "0.18446744073709551615"
-        );
-    }
-
-    #[test]
-    fn decompress_zstd_enforces_upper_bound() {
-        let payload = vec![0x41u8; 4096];
-        let compressed = zstd_compress(&payload);
-
-        let ok = decompress_zstd_with_limit(&compressed, 4096).expect("exact limit ok");
-        assert_eq!(ok.len(), 4096);
-
-        let err = decompress_zstd_with_limit(&compressed, 1024).expect_err("over limit rejected");
-        assert!(matches!(err, ProtoDecodeError::Zstd(_)));
-        assert!(err.to_string().contains("exceeds maximum"));
-    }
-
-    #[test]
-    fn proto_reward_commission_bps_rejects_out_of_range_values() {
-        let valid: Reward = ProtoReward {
-            pubkey: "11111111111111111111111111111111".to_string(),
-            lamports: 10,
-            post_balance: 20,
-            reward_type: 3,
-            commission: String::new(),
-            commission_bps: "750".to_string(),
-        }
-        .into();
-        assert_eq!(valid.commission, Some(7));
-
-        let overflow: Reward = ProtoReward {
-            pubkey: "11111111111111111111111111111111".to_string(),
-            lamports: 10,
-            post_balance: 20,
-            reward_type: 3,
-            commission: String::new(),
-            commission_bps: "30000".to_string(),
-        }
-        .into();
-        assert_eq!(overflow.commission, None);
+    fn rewards_and_commission() {
+        // Reward { pubkey "a", lamports -5, reward_type 4, commission "+7" }, num_partitions {4}
+        let reward = [0x0a, 0x01, b'a', 0x10, 0xfb, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01, 0x20, 0x04, 0x2a, 0x02, b'+', b'7'];
+        let mut bytes = vec![0x0a, reward.len() as u8];
+        bytes.extend(reward);
+        bytes.extend([0x12, 0x02, 0x08, 0x04]);
+        let r = parse_rewards(&bytes).unwrap();
+        assert_eq!(r.num_partitions, Some(4));
+        assert_eq!(r.rewards[0].lamports, -5);
+        assert_eq!(r.rewards[0].reward_type, Some(4));
+        assert_eq!(r.rewards[0].commission, Some(7));
+        // commission_bps fallback
+        let rw = PbReward { commission_bps: "750".into(), ..Default::default() };
+        assert_eq!(convert_reward(rw).commission, Some(7));
+        let rw = PbReward { commission_bps: "30000".into(), ..Default::default() };
+        assert_eq!(convert_reward(rw).commission, None);
+        assert_eq!(parse_rewards(&[]).unwrap(), BlockRewards::default());
     }
 }

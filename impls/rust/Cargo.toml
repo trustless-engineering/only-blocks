@@ -2,45 +2,18 @@
 name = "onlyblocks"
 version = "0.1.0"
 edition = "2021"
-description = "Historical-only Solana JSON-RPC server backed by Old Faithful HTTP/2 Range requests"
+description = "OnlyBlocks: a zero-crate, pure-std historical Solana getBlock JSON-RPC server backed by Old Faithful HTTP Range reads"
+publish = false
 
+# Zero third-party crates: everything (HTTP, JSON, CAR, DAG-CBOR, protobuf, bincode,
+# zstd, Base58/64, LRU caches) is implemented on top of Rust `std` in `src/`.
 [dependencies]
-axum = "0.8"
-bincode = "1"
-bytes = "1"
-cid = "0.11"
-clap = { version = "4", features = ["derive", "env"] }
-crc = "3"
-fastrand = "2"
-fnv = "1"
-httpdate = "1"
-lru = "0.12"
-multihash = { version = "0.19", default-features = false }
-prost = "0.14"
-reqwest = { version = "0.12", default-features = false, features = ["http2", "rustls-tls"] }
-serde = { version = "1", features = ["derive"] }
-serde_cbor = "0.11"
-serde_json = "1"
-solana-account-decoder-client-types = { version = "=3.1.14", features = ["agave-unstable-api"] }
-solana-hash = "3.1"
-solana-message = "3.0"
-solana-pubkey = { version = "3.0", default-features = false }
-solana-reward-info = { version = "3.0", features = ["serde"] }
-solana-serde = "3.0"
-solana-transaction = { version = "3.0", features = ["serde"] }
-solana-transaction-context = { version = "=3.1.14", features = ["agave-unstable-api", "bincode", "serde"] }
-solana-transaction-error = { version = "3.0", features = ["serde"] }
-solana-transaction-status = { version = "=3.1.14", features = ["agave-unstable-api"] }
-thiserror = "2"
-tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-url = "2"
-zstd = { version = "0.14", default-features = false }
 
 [dev-dependencies]
-http-body-util = "0.1"
-sha2 = "0.10"
-solana-signature = { version = "3.1", default-features = false }
-tokio = { version = "1", features = ["full"] }
-tower = { version = "0.5", features = ["util"] }
+
+[profile.release]
+opt-level = 3
+codegen-units = 4
+debug = false
+# Panics must unwind so a hostile archive byte becomes a -32603, never a crash.
+panic = "unwind"

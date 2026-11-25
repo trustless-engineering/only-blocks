@@ -1,39 +1,41 @@
-//! OnlyBlocks — Historical-only Solana JSON-RPC server backed by Old Faithful HTTP/2 Range
-//! transport.
+//! OnlyBlocks — a zero-crate, pure-`std` historical Solana `getBlock` JSON-RPC 2.0 server that
+//! reads blocks straight out of the Old Faithful archive with two HTTP Range requests.
 //!
-//! All data is fetched on demand over HTTP/2 Range requests, decoded strictly in RAM, and
-//! cached only in bounded RAM-only LRU caches with zero local disk downloads.
+//! Every codec is hand-written on top of the standard library:
+//!
+//! | Module | What it implements |
+//! |---|---|
+//! | [`http_server`] | HTTP/1.1 server over `TcpListener` with an elastic worker pool |
+//! | [`http_client`] | keep-alive HTTP/1.1 Range client over `TcpStream`; OS `curl` for `https://` |
+//! | [`old_faithful`] | the 2-range-read protocol, retries with jitter, semaphore, slot-range LRU |
+//! | [`json`] | strict RFC 8259 parser and streaming writer |
+//! | [`car`], [`cbor`], [`ipld`] | CARv1 sections, CIDs, DAG-CBOR, Old Faithful nodes, DataFrames |
+//! | [`hash`] | CRC-64/GO-ISO and FNV-1a |
+//! | [`zstd`] | RFC 8878 Zstandard decoder with XXH64 |
+//! | [`proto`], [`bincode`] | transaction metadata and rewards codecs |
+//! | [`tx`] | Solana `VersionedTransaction` wire format |
+//! | [`codec`] | Base58, Base64, `uiAmountString` formatting |
+//! | [`encode`] | the `getBlock` JSON result |
+//! | [`rpc`] | JSON-RPC envelope, params, and the `getBlock` pipeline |
 
+pub mod bincode;
+pub mod block;
+pub mod car;
+pub mod cbor;
+pub mod codec;
 pub mod config;
-pub mod decoder;
+pub mod encode;
 pub mod error;
+pub mod hash;
+pub mod http_client;
+pub mod http_server;
+pub mod ipld;
+pub mod json;
+pub mod lru;
+pub mod model;
 pub mod old_faithful;
 pub mod proto;
 pub mod rpc;
-
-pub use config::{
-    OldFaithfulConfig, RetryConfig, DEFAULT_BASE_URL, DEFAULT_CONNECT_TIMEOUT,
-    DEFAULT_MAX_CONCURRENT_REQUESTS, DEFAULT_MAX_SLICE_BYTES, DEFAULT_POOL_IDLE_TIMEOUT,
-    DEFAULT_POOL_MAX_IDLE_PER_HOST, DEFAULT_REQUEST_TIMEOUT, DEFAULT_SLOT_RANGE_CACHE_CAPACITY,
-};
-pub use decoder::{
-    decode_block_from_car, decode_block_from_index, encode_block, extract_blockhash_from_car,
-    BlockHeader, CarIndex, DecodeOptions, DecodedBlock, DecoderError, NodeKind,
-    MAX_CAR_SECTION_SIZE,
-};
-pub use error::OldFaithfulError;
-pub use old_faithful::{
-    parse_slot_range_entry, slot_range_byte_offset, slot_to_epoch, slot_to_index,
-    OldFaithfulClient, SlotAddress, SlotCarSlice, SlotFetchMeta, SlotRange, SlotRangeLookup,
-    SLOTS_PER_EPOCH, SLOT_RANGE_ENTRY_BYTES,
-};
-pub use proto::{
-    decode_rewards_bytes, decode_rewards_frame, decode_transaction_status_meta_bytes,
-    decode_transaction_status_meta_frame, decompress_zstd, DecodedRewards, ProtoDecodeError,
-    BINCODE_EPOCH_CUTOFF, BINCODE_SLOT_CUTOFF, MAX_DECOMPRESSED_BYTES,
-};
-pub use rpc::{
-    build_router, build_router_with_limits, error_codes, parse_block_encoding, parse_transaction_encoding,
-    GetBlockParams, JsonRpcError, JsonRpcRequest, JsonRpcResponse, RpcState,
-    DEFAULT_BLOCKHASH_CACHE_CAPACITY, DEFAULT_MAX_BATCH_SIZE, DEFAULT_MAX_REQUEST_BODY_BYTES,
-};
+pub mod signal;
+pub mod tx;
+pub mod zstd;
