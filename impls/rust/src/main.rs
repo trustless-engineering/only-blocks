@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use clap::Parser;
-use instant_rpc::{
+use onlyblocks::{
     build_router_with_limits, OldFaithfulClient, OldFaithfulConfig, RetryConfig, RpcState,
     DEFAULT_BASE_URL, DEFAULT_BLOCKHASH_CACHE_CAPACITY, DEFAULT_CONNECT_TIMEOUT,
     DEFAULT_MAX_BATCH_SIZE, DEFAULT_MAX_CONCURRENT_REQUESTS, DEFAULT_MAX_REQUEST_BODY_BYTES,
@@ -12,12 +12,12 @@ use tokio::net::TcpListener;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
-/// Instant RPC — Historical-only Solana JSON-RPC server backed by Old Faithful.
+/// OnlyBlocks — Historical-only Solana JSON-RPC server backed by Old Faithful.
 #[derive(Debug, Parser)]
-#[command(name = "instant-rpc", version, about)]
+#[command(name = "onlyblocks", version, about)]
 struct Cli {
     /// Socket address to bind the JSON-RPC HTTP server to.
-    #[arg(long, default_value = "127.0.0.1:8899", env = "INSTANT_RPC_BIND")]
+    #[arg(long, default_value = "127.0.0.1:8899", env = "ONLYBLOCKS_BIND")]
     bind: SocketAddr,
 
     /// Base URL for the Old Faithful archive.
@@ -109,7 +109,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         blockhash_cache_capacity = cli.blockhash_cache_capacity,
         max_request_body_bytes = cli.max_request_body_bytes,
         max_batch_size = cli.max_batch_size,
-        "instant-rpc JSON-RPC server listening (historical-only, zero disk downloads)"
+        "onlyblocks JSON-RPC server listening (historical-only, zero disk downloads)"
     );
 
     axum::serve(listener, app)
@@ -139,10 +139,10 @@ async fn shutdown_signal() {
 
     tokio::select! {
         _ = ctrl_c => {
-            info!("received SIGINT; stopping instant-rpc server gracefully");
+            info!("received SIGINT; stopping onlyblocks server gracefully");
         }
         _ = terminate => {
-            info!("received SIGTERM; stopping instant-rpc server gracefully");
+            info!("received SIGTERM; stopping onlyblocks server gracefully");
         }
     }
 }

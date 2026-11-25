@@ -1,4 +1,4 @@
-//! Instant RPC — Historical-only Solana JSON-RPC server backed by Old Faithful HTTP/2 Range
+//! OnlyBlocks — Historical-only Solana JSON-RPC server backed by Old Faithful HTTP/2 Range
 //! transport.
 //!
 //! All data is fetched on demand over HTTP/2 Range requests, decoded strictly in RAM, and
@@ -17,9 +17,9 @@ pub use config::{
     DEFAULT_POOL_MAX_IDLE_PER_HOST, DEFAULT_REQUEST_TIMEOUT, DEFAULT_SLOT_RANGE_CACHE_CAPACITY,
 };
 pub use decoder::{
-    decode_block_from_car, decode_block_from_index, decode_transaction_by_signature, encode_block,
-    encode_transaction, extract_blockhash_from_car, BlockHeader, CarIndex, DecodeOptions,
-    DecodedBlock, DecoderError, NodeKind, MAX_CAR_SECTION_SIZE,
+    decode_block_from_car, decode_block_from_index, encode_block, extract_blockhash_from_car,
+    BlockHeader, CarIndex, DecodeOptions, DecodedBlock, DecoderError, NodeKind,
+    MAX_CAR_SECTION_SIZE,
 };
 pub use error::OldFaithfulError;
 pub use old_faithful::{
@@ -33,8 +33,7 @@ pub use proto::{
     BINCODE_EPOCH_CUTOFF, BINCODE_SLOT_CUTOFF, MAX_DECOMPRESSED_BYTES,
 };
 pub use rpc::{
-    build_router, build_router_with_limits, error_codes, parse_block_encoding, parse_signature,
-    parse_transaction_encoding, GetBlockParams, GetTransactionParams, JsonRpcError, JsonRpcRequest,
-    JsonRpcResponse, RpcState, DEFAULT_BLOCKHASH_CACHE_CAPACITY, DEFAULT_MAX_BATCH_SIZE,
-    DEFAULT_MAX_REQUEST_BODY_BYTES,
+    build_router, build_router_with_limits, error_codes, parse_block_encoding, parse_transaction_encoding,
+    GetBlockParams, JsonRpcError, JsonRpcRequest, JsonRpcResponse, RpcState,
+    DEFAULT_BLOCKHASH_CACHE_CAPACITY, DEFAULT_MAX_BATCH_SIZE, DEFAULT_MAX_REQUEST_BODY_BYTES,
 };
