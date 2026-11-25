@@ -287,6 +287,10 @@ contains
         return
       end select
     end if
+    if (o%encoding == ENC_B58 .and. o%maxv >= 1) then
+      call put_error(out, -32602, 'base58 encoding is not supported with maxSupportedTransactionVersion >= 1', idtext)
+      return
+    end if
     if (o%details == DET_ACCOUNTS .and. o%encoding /= ENC_JSON) then
       call put_error(out, -32602, 'Invalid params: transactionDetails "accounts" requires encoding "json"', idtext)
       return
@@ -452,6 +456,7 @@ contains
     integer(int64) :: v1, v2
     integer :: e, ei, ti, idx
     logical :: complete, has_meta, gate, first_tx
+    integer :: gate_ver
     code = 0
     msg = ''
     ! 1-3: the block itself
@@ -517,6 +522,7 @@ contains
     call sb_u64(r, blk%parent)
     ! 5: transactions
     gate = .false.
+    gate_ver = 0
     if (o%details /= DET_NONE) then
       if (o%details == DET_SIGS) then
         call sb_add(r, ',"signatures":[')
@@ -579,11 +585,12 @@ contains
             return
           end if
           complete = has_meta
-          if (.not. has_meta .and. tx%v0) then
+          if (.not. has_meta .and. tx%ver >= 0) then
             call meta_default(meta)
             complete = .true.
           end if
-          if (complete .and. tx%v0 .and. o%maxv < 0) then
+          if (complete .and. tx%ver >= 0 .and. (o%maxv < 0 .or. tx%ver > o%maxv)) then
+            if (.not. gate) gate_ver = tx%ver
             gate = .true.
             cycle
           end if
@@ -633,9 +640,9 @@ contains
     end if
     if (gate) then
       code = -32015
-      msg = 'Transaction version (0) is not supported by the requesting client. ' // &
+      msg = 'Transaction version (' // itoa(gate_ver) // ') is not supported by the requesting client. ' // &
             'Please try the request again with the following configuration parameter: ' // &
-            '"maxSupportedTransactionVersion": 0'
+            '"maxSupportedTransactionVersion": ' // itoa(gate_ver)
       return
     end if
     call sb_add(r, ',"blockTime":')

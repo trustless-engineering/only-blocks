@@ -663,6 +663,9 @@ function tx_body_json(enc, accounts,   parsed, out, i, j, ix) {
                   bytes_list(TXLU_WS[i], TXLU_WN[i]) ",\"readonlyIndexes\":" bytes_list(TXLU_RS[i], TXLU_RN[i]) "}"
         out = out "]"
     }
+    if (TXV1)
+        out = out ",\"transactionConfig\":{\"priorityFee\":" TXCF_PF ",\"computeUnitLimit\":" TXCF_CU \
+              ",\"loadedAccountsDataSizeLimit\":" TXCF_LA ",\"heapSize\":" TXCF_HS "}"
     return out "}}"
 }
 

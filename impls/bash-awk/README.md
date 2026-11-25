@@ -18,7 +18,8 @@ included, is AWK.
   at once. The port is listening again long before the handler replies.
 * One long-lived **AWK coprocess** (`main.awk`) does everything else: JSON-RPC,
   CARv1, DAG-CBOR, CIDs, DataFrames, CRC-64/GO-ISO, FNV-1a, Base58 and Base64,
-  RFC 8878 Zstandard (`zstd.awk`), `VersionedTransaction`, protobuf, all five
+  RFC 8878 Zstandard (`zstd.awk`), `VersionedTransaction` (legacy, v0 and
+  SIMD-0385 v1), protobuf, all five
   bincode metadata layouts, `TransactionError`, and both bounded LRU caches
   (doubly linked lists threaded through awk arrays). Bash and AWK talk over
   anonymous pipes using length- and sequence-tagged messages.

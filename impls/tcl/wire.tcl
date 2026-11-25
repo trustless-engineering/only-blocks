@@ -315,7 +315,41 @@ proc tx_lookup {name} {
         readonlyIndexes [bytes_list [take r [compact r]]]
 }
 proc tx_instruction {name} {upvar 1 $name r; instruction r 1}
+proc u16 {name} {upvar 1 $name r; fixed r 2 su}
+proc v1_ix_header {name} {upvar 1 $name r; list [u8 r] [u8 r] [u16 r]}
+# SIMD-0385 v1: fixed-width header, config mask, static keys, config values,
+# instruction headers, payloads, then signatures at the tail.
+proc transaction_v1 {data} {
+    set r [reader $data]
+    take r 1
+    set header [dict create numRequiredSignatures [u8 r] \
+        numReadonlySignedAccounts [u8 r] numReadonlyUnsignedAccounts [u8 r]]
+    set mask [u32 r]
+    if {($mask & ~0x1f) != 0 || ($mask & 3) == 1 || ($mask & 3) == 2} {error "Invalid v1 transaction config mask"}
+    set recent [read_pubkey r]
+    set num_ix [u8 r]
+    set keys [items r [u8 r] 32 read_pubkey]
+    set config [dict create priorityFee [expr {($mask & 3) == 3 ? [u64 r] : ""}] \
+        computeUnitLimit [expr {$mask & 4 ? [u32 r] : ""}] \
+        loadedAccountsDataSizeLimit [expr {$mask & 8 ? [u32 r] : ""}] \
+        heapSize [expr {$mask & 16 ? [u32 r] : ""}]]
+    set headers [items r $num_ix 4 v1_ix_header]
+    set instructions {}
+    foreach h $headers {
+        lassign $h program n_accounts data_len
+        lappend instructions [dict create programIdIndex $program accounts [take r $n_accounts] \
+            data [take r $data_len] stackHeight 1]
+    }
+    set signatures [items r [dict get $header numRequiredSignatures] 64 raw_signature]
+    set message [dict create header $header accountKeys $keys recentBlockhash $recent \
+        instructions $instructions transactionConfig $config]
+    list 1 $signatures $message [string range $data 0 [expr {[lindex $r 1] - 1}]]
+}
 proc transaction {data} {
+    if {![string length $data]} {error "Empty transaction"}
+    binary scan $data cu first
+    if {$first == 0x81} {return [transaction_v1 $data]}
+    if {$first >= 0x80} {error "Unsupported wire transaction discriminator"}
     set r [reader $data]
     set signatures [items r [compact r] 64 raw_signature]
     set prefix [u8 r]

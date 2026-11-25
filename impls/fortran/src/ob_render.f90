@@ -68,6 +68,17 @@ contains
     end if
   end subroutine sb_bool
 
+  subroutine sb_opt_u64(sb, has, v)
+    type(sb_t), intent(inout) :: sb
+    logical, intent(in) :: has
+    integer(int64), intent(in) :: v
+    if (has) then
+      call sb_u64(sb, v)
+    else
+      call sb_add(sb, 'null')
+    end if
+  end subroutine sb_opt_u64
+
   subroutine sb_b58_str(sb, d, p, n)
     type(sb_t), intent(inout) :: sb
     integer(int8), intent(in) :: d(0:)
@@ -322,6 +333,17 @@ contains
       end do
       call sb_addc(sb, ']')
       if (tx%v0) call render_lookups(sb, t, tx)
+      if (tx%v1) then
+        call sb_add(sb, ',"transactionConfig":{"priorityFee":')
+        call sb_opt_u64(sb, tx%has_pf, tx%pf)
+        call sb_add(sb, ',"computeUnitLimit":')
+        call sb_opt_u64(sb, tx%has_cu, tx%cu)
+        call sb_add(sb, ',"loadedAccountsDataSizeLimit":')
+        call sb_opt_u64(sb, tx%has_la, tx%la)
+        call sb_add(sb, ',"heapSize":')
+        call sb_opt_u64(sb, tx%has_hs, tx%hs)
+        call sb_addc(sb, '}')
+      end if
       call sb_add(sb, '}}')
     end if
     call sb_add(sb, ',"meta":')
@@ -332,8 +354,9 @@ contains
       call sb_add(sb, 'null')
     end if
     if (complete .and. o%maxv >= 0) then
-      if (tx%v0) then
-        call sb_add(sb, ',"version":0')
+      if (tx%ver >= 0) then
+        call sb_add(sb, ',"version":')
+        call sb_int(sb, tx%ver)
       else
         call sb_add(sb, ',"version":"legacy"')
       end if

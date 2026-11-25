@@ -524,12 +524,17 @@ function cu16(   b, v) {
 # Parses the transaction at M[s .. s+n) into the TX* globals; 0 on error.
 function tx_parse(s, n,   c, i, k, p) {
     VP = s; VE = s + n
+    TXV0 = 0; TXV1 = 0; TXVN = ""
+    if (VP >= VE) return 0
+    if (M[VP] == 129) return tx_parse_v1(s, n)
+    if (M[VP] >= 128) return 0
     c = cu16(); if (c < 0 || c * 64 > VE - VP) return 0
     TXNSIG = c; TXSIG = VP; VP += 64 * c
     if (VP >= VE) return 0
     p = M[VP++]
     if (p > 128) return 0
     TXV0 = (p == 128)
+    TXVN = TXV0 ? 0 : ""
     if (TXV0) { if (VP >= VE) return 0; TXNRS = M[VP++] } else TXNRS = p
     if (VP + 2 > VE) return 0
     TXNROS = M[VP++]; TXNROU = M[VP++]
@@ -560,6 +565,46 @@ function tx_parse(s, n,   c, i, k, p) {
             TXLU_RS[i] = VP; TXLU_RN[i] = k; VP += k
         }
     }
+    TXRAW = s; TXRAWN = VP - s
+    return 1
+}
+
+# SIMD-0385 v1 (0x81): fixed-width header, u32 config mask, static keys,
+# config values, instruction headers, payloads, then tail signatures.
+function tx_parse_v1(s, n,   i, mask, nix, nk) {
+    VP = s + 1
+    if (VP + 7 > VE) return 0
+    TXNRS = M[VP++]; TXNROS = M[VP++]; TXNROU = M[VP++]
+    mask = le32(VP); VP += 4
+    if (mask >= 32 || mask % 4 == 1 || mask % 4 == 2) return 0
+    if (VP + 34 > VE) return 0
+    TXBH = VP; VP += 32
+    nix = M[VP++]; nk = M[VP++]
+    if (nk * 32 > VE - VP) return 0
+    TXNKEY = nk; TXKEY = VP; VP += 32 * nk
+    TXCF_PF = "null"; TXCF_CU = "null"; TXCF_LA = "null"; TXCF_HS = "null"
+    if (mask % 4 == 3) {
+        if (VP + 8 > VE) return 0
+        TXCF_PF = u64s(le32(VP + 4), le32(VP)); VP += 8
+    }
+    if (int(mask / 4) % 2) { if (VP + 4 > VE) return 0; TXCF_CU = sprintf("%.0f", le32(VP)); VP += 4 }
+    if (int(mask / 8) % 2) { if (VP + 4 > VE) return 0; TXCF_LA = sprintf("%.0f", le32(VP)); VP += 4 }
+    if (int(mask / 16) % 2) { if (VP + 4 > VE) return 0; TXCF_HS = sprintf("%.0f", le32(VP)); VP += 4 }
+    if (nix * 4 > VE - VP) return 0
+    TXNIX = nix
+    for (i = 0; i < nix; i++) {
+        TXIX_P[i] = M[VP]; TXIX_AN[i] = M[VP + 1]; TXIX_DN[i] = M[VP + 2] + M[VP + 3] * 256
+        VP += 4
+    }
+    for (i = 0; i < nix; i++) {
+        if (TXIX_AN[i] + TXIX_DN[i] > VE - VP) return 0
+        TXIX_AS[i] = VP; VP += TXIX_AN[i]
+        TXIX_DS[i] = VP; VP += TXIX_DN[i]
+    }
+    if (TXNRS * 64 > VE - VP) return 0
+    TXNSIG = TXNRS; TXSIG = VP; VP += 64 * TXNRS
+    TXNLU = 0
+    TXV1 = 1; TXVN = 1
     TXRAW = s; TXRAWN = VP - s
     return 1
 }
