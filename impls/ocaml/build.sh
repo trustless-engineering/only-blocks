@@ -8,10 +8,10 @@ if command -v ocamlopt >/dev/null 2>&1; then
 else
     OCAMLOPT=(nix --extra-experimental-features 'nix-command flakes' --offline shell nixpkgs#ocaml -c ocamlopt)
 fi
-mkdir -p _build bin
-cp -f "${SOURCES[@]}" _build/
+mkdir -p build bin
+cp -f "${SOURCES[@]}" build/
 (
-    cd _build
+    cd build
     "${OCAMLOPT[@]}" -O2 -I +unix -I +threads unix.cmxa threads.cmxa "${SOURCES[@]}" -o onlyblocks.new
 )
-mv -f _build/onlyblocks.new bin/onlyblocks
+mv -f build/onlyblocks.new bin/onlyblocks

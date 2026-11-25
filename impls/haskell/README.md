@@ -11,7 +11,7 @@ bash run.sh --bind 127.0.0.1:8899 --base-url https://files.old-faithful.net
 
 `build.sh` uses `ghc` from `PATH` if there is one. Otherwise it runs
 `nix shell nixpkgs#ghc --offline`, so GHC has to be in the Nix store already.
-A clean `-O2` build takes about 8 s. Build products go to `_build/` and
+A clean `-O2` build takes about 8 s. Build products go to `build/` and
 `bin/`, and both are git-ignored.
 
 ## How it stays at zero dependencies

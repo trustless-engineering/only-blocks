@@ -12,7 +12,7 @@ bash run.sh --bind 127.0.0.1:8899 --base-url https://files.old-faithful.net
 
 `build.sh` uses `ocamlopt` from `PATH` if there is one. Otherwise it runs
 `nix shell nixpkgs#ocaml --offline`, so the compiler has to be in the Nix
-store already. It copies the sources into `_build/`, so the source tree never
+store already. It copies the sources into `build/`, so the source tree never
 gets `.cmx`, `.cmi` or `.o` files. The binary goes to `bin/onlyblocks`.
 
 ## How it stays at zero dependencies
