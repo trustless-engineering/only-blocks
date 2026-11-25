@@ -456,6 +456,12 @@ void get_block(ctx_t *c, archive_t *a, const block_opts_t *o, jw_t *w) {
                 const cbor_t *data = cbor_at(node, 1);
                 if (!data) DIE(c, "Transaction node has no data");
                 parse_dataframe(c, data, &df);
+                /* The node's metadata DataFrame is parsed with the node (errors propagate, §5);
+                   its payload is reassembled and decoded only when metadata is wanted (§7). */
+                const cbor_t *md = cbor_at(node, 2);
+                dataframe_t mdf;
+                bool has_md = md && md->t == CB_ARR;
+                if (has_md) parse_dataframe(c, md, &mdf);
                 VRESERVE(c, txs);
                 txm_t *t = &txs.v[txs.n];
                 memset(t, 0, sizeof *t);
@@ -465,13 +471,7 @@ void get_block(ctx_t *c, archive_t *a, const block_opts_t *o, jw_t *w) {
                     VPUSH(c, sigs, t->tx.sigs);
                     continue;
                 }
-                const cbor_t *md = cbor_at(node, 2);
-                meta_t *m = NULL;
-                if (md && md->t == CB_ARR) {
-                    dataframe_t mdf;
-                    parse_dataframe(c, md, &mdf);
-                    m = decode_metadata(c, o->slot, reassemble(c, &car, &mdf));
-                }
+                meta_t *m = has_md ? decode_metadata(c, o->slot, reassemble(c, &car, &mdf)) : NULL;
                 if (!m && t->tx.v0) m = acalloc(c, 1, sizeof *m); /* default_meta */
                 t->meta = m;
                 t->missing = m == NULL;

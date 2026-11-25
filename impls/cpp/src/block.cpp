@@ -341,15 +341,19 @@ void get_block(Archive& archive, const BlockOptions& o, JsonWriter& w) {
                 auto node = car.node(tx_cid, 0);
                 const auto* data = node.at(1);
                 require(data != nullptr, "Transaction node has no data");
-                auto tx = Transaction::parse(DataFrame::parse(*data).reassemble(car));
+                auto tx_frame = DataFrame::parse(*data);
+                // The metadata DataFrame is parsed with its node (errors propagate, §5); its payload
+                // is reassembled and decoded only when metadata is wanted (§7).
+                std::optional<DataFrame> meta_frame;
+                if (const auto* md = node.at(2); md && md->is_array()) meta_frame = DataFrame::parse(*md);
+                auto tx = Transaction::parse(tx_frame.reassemble(car));
                 if (o.details == Details::Signatures) {
                     require(!tx.signatures.empty(), "transaction has no signature");
                     first_signatures.push_back(tx.signatures.front());
                     continue;
                 }
                 std::optional<Meta> meta;
-                if (const auto* md = node.at(2); md && md->is_array())
-                    meta = decode_metadata(o.slot, DataFrame::parse(*md).reassemble(car), arena);
+                if (meta_frame) meta = decode_metadata(o.slot, meta_frame->reassemble(car), arena);
                 if (!meta && tx.v0) meta.emplace();  // default_meta for a v0 transaction
                 transactions.push_back({std::move(tx), std::move(meta)});
             }
