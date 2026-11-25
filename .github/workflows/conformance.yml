@@ -134,7 +134,8 @@ jobs:
           HOMEBREW_NO_INSTALL_CLEANUP: "1"
         run: |
           case "${{ matrix.impl }}" in
-            tcl)      brew install tcl-tk ;;
+            tcl)      brew install tcl-tk
+                      echo "$(brew --prefix tcl-tk)/bin" >> "$GITHUB_PATH" ;;
             php)      brew install php ;;
             erlang)   brew install erlang@26
                       echo "$(brew --prefix erlang@26)/bin" >> "$GITHUB_PATH" ;;
@@ -177,12 +178,12 @@ jobs:
             javascript-node) want '^v25\.' node --version ;;
             typescript-deno) want '^deno 2\.6\.' deno --version ;;
             bun)             want '^1\.4\.' bun --version ;;
-            java)            PATH="/opt/homebrew/opt/openjdk@17/bin:$PATH" want '"(1[7-9]|[2-9][0-9])\.' java -version ;;
+            java)            PATH="${JAVA_HOME:+$JAVA_HOME/bin:}/opt/homebrew/opt/openjdk@17/bin:$PATH" want '"(1[7-9]|[2-9][0-9])\.' java -version ;;
             kotlin)          want 'kotlinc-jvm' kotlinc -version ;;
             csharp)          want '^8\.' sh -c 'dotnet --list-sdks | grep -m1 "^8\."' ;;
             perl)            want '^v5\.' /usr/bin/perl -e 'print "$^V\n"' ;;
             ruby)            want '^ruby 2\.6\.' /usr/bin/ruby --version ;;
-            tcl)             want '^9\.' /opt/homebrew/bin/tclsh <<<'puts [info patchlevel]' ;;
+            tcl)             want '^9\.' tclsh <<<'puts [info patchlevel]' ;;
             php)             want '^PHP 8\.' php --version ;;
             erlang)          want '^OTP 26' erl -noshell -eval 'io:format("OTP ~s~n",[erlang:system_info(otp_release)]),halt().' ;;
             elixir)          want '^Elixir ' sh -c 'elixir --version | grep "^Elixir"' ;;

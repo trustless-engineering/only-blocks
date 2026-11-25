@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")"
-export PATH="/opt/homebrew/opt/openjdk@17/bin:$HOME/.nix-profile/bin:/opt/homebrew/bin:$PATH"
-export JAVA_HOME="$(dirname "$(dirname "$(command -v javac)")")"
+if [[ -n "${JAVA_HOME:-}" && -x "$JAVA_HOME/bin/javac" ]]; then
+    export PATH="$JAVA_HOME/bin:$HOME/.nix-profile/bin:/opt/homebrew/bin:$PATH"
+else
+    export PATH="/opt/homebrew/opt/openjdk@17/bin:$HOME/.nix-profile/bin:/opt/homebrew/bin:$PATH"
+    export JAVA_HOME="$(dirname "$(dirname "$(command -v javac)")")"
+fi
 mkdir -p build
 if command -v kotlinc >/dev/null; then
     compiler=(kotlinc)

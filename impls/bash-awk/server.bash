@@ -40,9 +40,9 @@ host=${BASH_REMATCH[1]} port=${BASH_REMATCH[2]}
 [[ $host == localhost ]] && host=127.0.0.1
 
 loadables=$(dirname -- "$(readlink -f -- "$BASH")")/../lib/bash
-enable -f accept accept 2>/dev/null || enable -f "$loadables/accept" accept 2>/dev/null ||
+enable -f accept accept 2>/dev/null || enable -f "$loadables/accept" accept 2>/dev/null || enable -f /opt/homebrew/lib/bash/accept accept 2>/dev/null ||
     die "this bash ($BASH_VERSION) does not ship the 'accept' loadable builtin"
-enable -f sleep sleep 2>/dev/null || enable -f "$loadables/sleep" sleep 2>/dev/null ||
+enable -f sleep sleep 2>/dev/null || enable -f "$loadables/sleep" sleep 2>/dev/null || enable -f /opt/homebrew/lib/bash/sleep sleep 2>/dev/null ||
     sleep() { /bin/sleep "$@"; }
 
 export OB_BASE=$base OB_DIR=$DIR OB_BASH=$BASH

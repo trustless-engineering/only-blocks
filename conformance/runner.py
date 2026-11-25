@@ -787,7 +787,7 @@ def run(args):
 
 
 DUMMY_SERVER = """\
-import http.client, json, os, sys
+import http.client, json, os, socketserver, sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 bind, base = sys.argv[2], sys.argv[4]
@@ -826,10 +826,15 @@ def handle(req):
     return r
 
 class Handler(BaseHTTPRequestHandler):
+    def log_message(self, *_args):
+        pass
+
     def do_POST(self):
         length = int(self.headers["Content-Length"])
         if length > 1 << 20:
+            self.close_connection = True
             self.send_response(413)
+            self.send_header("Connection", "close")
             self.send_header("Content-Length", "0")
             self.end_headers()
             return
@@ -844,7 +849,12 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
-ThreadingHTTPServer(("127.0.0.1", int(bind.split(":")[1])), Handler).serve_forever()
+class Server(ThreadingHTTPServer):
+    def server_bind(self):
+        socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
+
+Server(("127.0.0.1", int(bind.split(":")[1])), Handler).serve_forever()
 """
 
 
@@ -887,7 +897,7 @@ def self_test():
         cmd = [sys.executable, str(scripts / "runner.py"), "--fixtures", str(fixture),
                "--bench", "--json-out", str(output)]
         env = dict(os.environ, DUMMY_PYTHON=sys.executable)
-        passing = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=45)
+        passing = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=120)
         if passing.returncode != 0 or "PASS" not in passing.stdout:
             raise CheckFailed(f"self-test passing fixture did not pass:\n{passing.stdout}{passing.stderr}")
         summary = json.loads(output.read_text(encoding="utf-8"))["implementations"][0]
@@ -901,7 +911,7 @@ def self_test():
         block["expected_result"]["transactions"][0]["meta"]["fee"] = 1
         fixture.write_text(json.dumps(manifest), encoding="utf-8")
         failing = subprocess.run([*cmd, "--impl", "dummy"], env=env,
-                                 capture_output=True, text=True, timeout=45)
+                                 capture_output=True, text=True, timeout=120)
         diff = "$.transactions[0].meta.fee: expected 1, got 5000"
         if failing.returncode != 1 or "FAIL" not in failing.stdout or diff not in failing.stdout:
             raise CheckFailed(f"self-test failing fixture did not report {diff!r}:\n"

@@ -23,6 +23,7 @@ import os
 import re
 import signal
 import socket
+import socketserver
 import stat
 import struct
 import subprocess
@@ -220,6 +221,10 @@ def security_cases():
 
 
 class AuditOrigin(ThreadingHTTPServer):
+    def server_bind(self):
+        socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
+
     def __init__(self):
         self.cases = security_cases()
         self.ranges = {}

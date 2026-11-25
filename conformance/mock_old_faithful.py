@@ -4,6 +4,7 @@
 import argparse
 import json
 import re
+import socketserver
 import struct
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -17,6 +18,11 @@ BYTE_RANGE = re.compile(r"bytes=([0-9]{1,20})-([0-9]{1,20})", re.IGNORECASE)
 
 
 class MockOldFaithful(ThreadingHTTPServer):
+    def server_bind(self):
+        # Avoid HTTPServer.server_bind()'s socket.getfqdn(), which stalls 5s per bind on macOS CI runners.
+        socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
+
     def __init__(self, manifest_path):
         with manifest_path.open(encoding="utf-8") as stream:
             self.manifest = json.load(stream)

@@ -536,7 +536,14 @@ def main():
     # Force port validation at startup.
     _ = base.port
     host, port = args.bind.rsplit(':', 1)
-    server = ThreadingHTTPServer((host, int(port)), Handler)
+    import socketserver
+
+    class Server(ThreadingHTTPServer):
+        def server_bind(self):
+            socketserver.TCPServer.server_bind(self)
+            self.server_name, self.server_port = self.server_address[:2]
+
+    server = Server((host, int(port)), Handler)
     server.archive = Archive(base)
 
     def stop(*_):
