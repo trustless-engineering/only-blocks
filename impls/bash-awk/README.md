@@ -11,7 +11,8 @@ Ruby, Node or `jq`.
 
 * `server.bash` listens with Bash's **`accept` loadable builtin**, which ships
   with bash in `lib/bash/`. It forks one subshell per connection, and that
-  subshell frames the HTTP/1.1 request with `read -N` and `read -t`. The
+  subshell frames the HTTP/1.1 request with `read -t`. The body is read with
+  `read -n` and NUL as the delimiter, so a raw NUL is caught, not skipped. The
   builtin closes its listening socket on every accept, so the hand-off happens
   at once. The port is listening again long before the handler replies.
 * One long-lived **AWK coprocess** (`main.awk`) does everything else: JSON-RPC,
@@ -58,6 +59,8 @@ short-lived handler subshell, and each Range read or zstd call adds a few
 short-lived tool processes (`od`, `xxd`, `zstd`, `curl`). No temporary files,
 FIFOs, here-docs or here-strings are used. Every byte stays in pipes or RAM.
 A blocking `accept(2)` restarts after a signal, so a SIGTERM or SIGINT trap
-alone would wait for the next client. A sentinel subshell therefore answers
-those signals by connecting to the server's own port. That returns `accept`,
-so the trap can exit with status 0.
+in the accepting process would wait for the next client. The accept loop
+therefore runs in a child with default signal actions. The main shell only
+`wait`s, which a trapped signal interrupts at once. It stops the loop and the
+engine and exits 0, whether the signal went to its PID alone or to the whole
+process group.

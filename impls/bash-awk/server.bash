@@ -132,41 +132,45 @@ handle() {
         return
     fi
     printf 'Q %s %d\n%s\001' "$seq" "${#body}" "$body" >&"$TO"
-    while IFS= read -r -u "$FROM" head; do
-        IFS= read -r -u "$FROM" resp
+    while :; do
+        IFS= read -r -u "$FROM" head || return
+        IFS= read -r -u "$FROM" resp || return
         [[ $head == "R $seq "* ]] && break
     done
     reply_json "$fd" "$resp"
 }
-
-# Shutdown. The blocking accept(2) restarts after a signal, so a trap alone
-# would wait for the next client. A tiny sentinel subshell (same process
-# group) therefore answers SIGINT/SIGTERM by connecting to our own port,
-# which returns accept and lets the trap exit 0. It polls for its parent so
-# it never outlives the server.
-trap 'exit 0' TERM INT
-(
-    exec {TO}>&- {FROM}<&-
-    trap '{ exec 3<>"/dev/tcp/$host/$port"; } 2>/dev/null; exit 0' TERM INT
-    while kill -0 "$$" 2>/dev/null; do sleep 1; done
-) &
 
 # Single-threaded accept loop. `accept` closes its listening socket once a
 # client connects, so the connection is handed to a background handler
 # straight away and the port is listening again long before that handler
 # replies. Handlers run one at a time (wait for the previous one first), which
 # keeps the engine's pipes strictly request/reply.
-seq=0 prev= fails=0
-while :; do
-    if ! accept -b "$host" -v fd "$port" 2>/dev/null; then
-        ((++fails > 40)) && die "cannot listen on $host:$port"
-        sleep 0.05
-        continue
-    fi
-    fails=0
-    [[ -n $prev ]] && wait "$prev"
-    ((++seq))
-    handle "$fd" "$seq" &
-    prev=$!
-    exec {fd}>&-
-done
+serve() {
+    local seq=0 prev= fails=0 fd
+    while :; do
+        if ! accept -b "$host" -v fd "$port" 2>/dev/null; then
+            ((++fails > 40)) && die "cannot listen on $host:$port"
+            sleep 0.05
+            continue
+        fi
+        fails=0
+        [[ -n $prev ]] && wait "$prev"
+        ((++seq))
+        handle "$fd" "$seq" &
+        prev=$!
+        exec {fd}>&-
+    done
+}
+
+# Shutdown. A blocking accept(2) restarts after a signal, so a trap in the
+# process blocked in accept would only run at the next connection. The loop
+# therefore runs in a child (async subshells get default signal actions)
+# while this shell waits: `wait` returns as soon as a trapped SIGINT/SIGTERM
+# arrives, whether it was sent to this PID alone or to the process group.
+trap 'kill "$loop" "$ENGINE_PID" 2>/dev/null; exit 0' TERM INT
+serve &
+loop=$!
+wait "$loop"
+status=$?
+kill "$ENGINE_PID" 2>/dev/null
+exit "$status"
