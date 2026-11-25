@@ -249,7 +249,7 @@ highlights.
 
 ### Close to the metal
 
-**[AArch64 assembly](impls/arm64-asm/)** is 8 276 non-blank, non-comment
+**[AArch64 assembly](impls/arm64-asm/)** is 8 431 non-blank, non-comment
 lines across eleven `.s` files, written by hand for Apple Silicon. Exceptions
 work like `setjmp`: `_ob_try` saves `x19`–`x30` and `sp` into a frame on the
 caller's stack, `_ob_throw` unwinds to it, and every decoder simply throws on
@@ -362,16 +362,16 @@ the same language on a second runtime.
 Everything in [`conformance/`](conformance/) is stdlib-only Python 3.11+ and
 runs on loopback against
 [`mock_old_faithful.py`](conformance/mock_old_faithful.py). The mock is an
-HTTP/1.1 Range origin that serves two small fixture epochs, 100 and 700,
-plus the golden responses in
+HTTP/1.1 Range origin that serves three small fixture epochs (100, 700 and
+1095) plus the golden responses in
 [`fixtures/manifest.json`](conformance/fixtures/manifest.json).
 
 | Suite | Command | Checks |
 |---|---|---|
-| **Golden conformance** | `make conformance` | 81 golden cases: every encoding and `transactionDetails` mode, rewards on and off, multi-frame DataFrames, pre-157 bincode, skipped and unarchived slots *and parents*, the `-32015` version gate, every envelope and param rule, and mixed batches. It also checks that `getTransaction` returns `-32601` with zero upstream requests, that the warm cache makes zero slot-range reads, that an injected `429` is retried, that nothing is written to disk, and that oversized or deeply nested bodies are rejected. |
+| **Golden conformance** | `make conformance` | 103 golden cases: every encoding and `transactionDetails` mode across `legacy`, `v0` and `v1` (SIMD-0385) transactions (including `> 1 232`-byte `v1` payloads, `TransactionConfigMask` bitmasks, separated instruction headers/payloads, trailing signature arrays and verbatim mainnet epoch-1095 CAR slices), rewards on and off, multi-frame DataFrames, pre-157 bincode, skipped and unarchived slots *and parents*, the `-32015` version gate, `base58` rejection when `maxSupportedTransactionVersion >= 1`, corrupt `v1` wire slices, every envelope and param rule, and mixed batches. It also checks that `getTransaction` returns `-32601` with zero upstream requests, that the warm cache makes zero slot-range reads, that an injected `429` is retried, that nothing is written to disk, and that oversized or deeply nested bodies are rejected. |
 | **Strict shapes** | `make strict` | The same suite, but `jsonParsed` instructions must match the golden shape exactly. |
-| **Security audit** | `make security` | Hostile archive bytes: cyclic and corrupt DataFrames, bad CRC-64/FNV checksums, truncated varints and CBOR, sections over 32 MiB, a 200 MB advertised slice, a ~16 KiB Zstandard bomb that declares 512 MiB + 1 byte, and invalid zstd. Hostile requests: a 1.5 MiB + 1 byte body, a 105-item batch, 1 MiB of nested JSON, and negative, fractional and u64-overflow slots. After each one, the server must still answer `getHealth`, and its disk is snapshotted before and after shutdown. |
-| **Live mainnet** | `make live` | Probes the real archive at slots `302400001` (modern, v0), `302400004` (skipped) and `43200000` (pre-157 bincode). The block's hashes, parent, time, height, rewards, transaction count, fees and first and last signatures are compared with pinned mainnet facts. |
+| **Security audit** | `make security` | Hostile archive bytes: cyclic and corrupt DataFrames, bad CRC-64/FNV checksums, truncated varints and CBOR, sections over 32 MiB, a 200 MB advertised slice, a ~16 KiB Zstandard bomb that declares 512 MiB + 1 byte, invalid zstd, and malformed `v1` wire transactions (unknown `config_mask` bits, partial priority-fee bits, truncated payloads and trailing signatures). Hostile requests: a 1.5 MiB + 1 byte body, a 105-item batch, 1 MiB of nested JSON, `base58` with `maxSupportedTransactionVersion >= 1`, and negative, fractional and u64-overflow slots. After each one, the server must still answer `getHealth`, and its disk is snapshotted before and after shutdown. |
+| **Live mainnet** | `make live` | Probes the real archive at slots `302400001` (epoch 700, `v0`), `473045001` (epoch 1095, `v1` + `v0` + `legacy`), `302400004` (skipped) and `43200000` (pre-157 bincode). The block's hashes, parent, time, height, rewards, transaction count, fees, `v0`/`v1` counts and first and last signatures are compared with pinned mainnet facts. |
 | **Benchmark** | `make bench` | Rewrites [`results.json`](conformance/results.json) from a clean `git archive` snapshot. It measures every implementation offline, runs every one live, and checks cross-language live parity. |
 
 Every target takes `IMPL=` to narrow the run, for example

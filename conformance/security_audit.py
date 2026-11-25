@@ -812,12 +812,15 @@ def render_report(summary):
     lines.extend([
         "## Probe inventory",
         "",
-        "- Headerless CAR sections: valid control, cyclic DataFrame links, bad CRC64/FNV checksum, "
-        "truncated uvarint, section length above 32 MiB, and truncated CBOR.",
+        "- Headerless CAR sections & v1 wire frames: valid control, cyclic DataFrame links, bad CRC64/FNV "
+        "checksum, truncated uvarint, section length above 32 MiB, truncated CBOR, and hostile SIMD-0385 v1 "
+        "transactions (unknown `config_mask` bit, partial priority-fee bit, truncated trailing signatures, "
+        "and truncated instruction payload).",
         "- Resource caps: a 200,000,000-byte advertised slice rejected before `.car` fetch, an oversized "
         "zstd content size, a valid high-ratio RLE frame, and invalid zstd bytes.",
         "- RPC/HTTP: 1.5 MiB + 1 byte POST, 105-item batch, 1 MiB deeply nested JSON, malformed JSON, "
-        "negative/fractional/u64-overflow slots, removed `getTransaction`, and `GET /`.",
+        "negative/fractional/u64-overflow slots, `base58` with `maxSupportedTransactionVersion >= 1`, "
+        "removed `getTransaction`, and `GET /`.",
         "- Every archive/RPC failure is followed immediately by `getHealth`; final liveness and zero-disk "
         "checks run before shutdown, with disk snapshots compared again after shutdown.",
         "",
