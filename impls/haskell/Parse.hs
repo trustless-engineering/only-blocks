@@ -5,7 +5,7 @@
 module Parse
   ( P, runP, runPrefix, failP, orElse, attempt
   , position, remaining, atEnd, peekByte, peekMaybe, slice, takeWhileP
-  , u8, u16be, u32be, u64be, u32le, u64le, f64le, takeBytes, skipBytes
+  , u8, u16be, u32be, u64be, u16le, u32le, u64le, f64le, takeBytes, skipBytes
   , uvarint, compactU16, countOf, sub, word64ToInt
   ) where
 
@@ -111,10 +111,11 @@ beN, leN :: B.ByteString -> Word64
 beN = B.foldl' (\acc b -> (acc `shiftL` 8) .|. fromIntegral b) 0
 leN = B.foldr' (\b acc -> (acc `shiftL` 8) .|. fromIntegral b) 0
 
-u16be, u32be, u64be, u32le, u64le :: P Word64
+u16be, u32be, u64be, u16le, u32le, u64le :: P Word64
 u16be = fixed 2 beN
 u32be = fixed 4 beN
 u64be = fixed 8 beN
+u16le = fixed 2 leN
 u32le = fixed 4 leN
 u64le = fixed 8 leN
 

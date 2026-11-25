@@ -115,25 +115,31 @@ block_params([SlotValue | Rest]) when length(Rest) =< 1 ->
     Commitment = Option(<<"commitment">>, <<"finalized">>),
     lists:member(Encoding, [<<"json">>, <<"jsonParsed">>, <<"base64">>, <<"base58">>]) orelse invalid(),
     lists:member(Details, [<<"full">>, <<"accounts">>, <<"signatures">>, <<"none">>]) orelse invalid(),
-    (Details =/= <<"accounts">> orelse Encoding =:= <<"json">>) orelse invalid(),
     is_boolean(Rewards) orelse invalid(),
     lists:member(Commitment, [<<"finalized">>, <<"confirmed">>]) orelse invalid(),
     MaxVersion = case Option(<<"maxSupportedTransactionVersion">>, none) of
                      none -> none;
                      V -> uint_param(V, 255)
                  end,
+    case Encoding =:= <<"base58">> andalso is_integer(MaxVersion) andalso MaxVersion >= 1 of
+        true -> throw({rpc, -32602, <<"base58 encoding is not supported with maxSupportedTransactionVersion >= 1">>});
+        false -> ok
+    end,
+    (Details =/= <<"accounts">> orelse Encoding =:= <<"json">>) orelse invalid(),
     {Slot, Encoding, Details, Rewards, MaxVersion};
 block_params(_) -> invalid().
 
 %% ---------------------------------------------------------------- transactions
 
-transaction_json(#{version := 0}, _Meta, _Enc, _Details, _Rewards, none) ->
-    throw({rpc, -32015, <<"Transaction version (0) is not supported by the requesting client. "
+transaction_json(#{version := Version}, _Meta, _Enc, _Details, _Rewards, MaxVersion)
+  when is_integer(Version), (MaxVersion =:= none orelse Version > MaxVersion) ->
+    V = integer_to_binary(Version),
+    throw({rpc, -32015, <<"Transaction version (", V/binary, ") is not supported by the requesting client. "
                           "Please try the request again with the following configuration parameter: "
-                          "\"maxSupportedTransactionVersion\": 0">>});
+                          "\"maxSupportedTransactionVersion\": ", V/binary>>});
 transaction_json(#{version := Version} = Tx, Meta0, Encoding, Details, Rewards, MaxVersion) ->
     Meta = case {Version, Meta0} of
-               {0, none} -> ob_meta:empty_meta();
+               {V, none} when is_integer(V) -> ob_meta:empty_meta();
                _ -> Meta0
            end,
     Parsed = Encoding =:= <<"jsonParsed">>,
@@ -183,12 +189,13 @@ message_json(Tx, Accounts, Keys, Parsed) ->
              false -> M0#{header => #{numRequiredSignatures => Nrs, numReadonlySignedAccounts => Nros,
                                       numReadonlyUnsignedAccounts => Nrou}}
          end,
-    case maps:get(lookups, Tx) of
-        undefined -> M1;
-        Lookups ->
+    case Tx of
+        #{version := 1, config := Config} -> M1#{transactionConfig => Config};
+        #{version := 0, lookups := Lookups} ->
             M1#{addressTableLookups =>
                     [#{accountKey => ob_wire:base58(K), writableIndexes => binary_to_list(W),
-                       readonlyIndexes => binary_to_list(R)} || {K, W, R} <- Lookups]}
+                       readonlyIndexes => binary_to_list(R)} || {K, W, R} <- Lookups]};
+        _ -> M1
     end.
 
 instruction_json(P, Accounts, Data, Height, none) ->
@@ -206,7 +213,7 @@ account_objects(#{version := Version, header := {Nrs, Nros, Nrou}, instructions 
                 Static, Loaded) ->
     {W, R} = case Version of
                  0 -> {maps:get(writable, Loaded), maps:get(readonly, Loaded)};
-                 legacy -> {[], []}
+                 _ -> {[], []}
              end,
     S = length(Static),
     NW = length(W),

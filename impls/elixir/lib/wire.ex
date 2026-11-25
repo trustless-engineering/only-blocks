@@ -336,7 +336,17 @@ defmodule OnlyBlocks.Wire do
 
   @doc "Decode a VersionedTransaction; `raw` is the consumed prefix (trailing bytes ignored)."
   def transaction(data) do
-    {nsig, r} = compact(data)
+    {tx, rest} =
+      case data do
+        <<0x81, r::binary>> -> transaction_v1(r)
+        <<nsig, r::binary>> when nsig < 0x80 -> transaction_legacy_or_v0(nsig, r)
+        _ -> fail("invalid transaction discriminator")
+      end
+
+    Map.put(tx, :raw, consumed(data, rest))
+  end
+
+  defp transaction_legacy_or_v0(nsig, r) do
     if nsig > div(byte_size(r), 64), do: fail("signature count exceeds input")
     <<sig_bytes::binary-size(nsig * 64), r::binary>> = r
     signatures = for <<sig::binary-size(64) <- sig_bytes>>, do: sig
@@ -344,7 +354,7 @@ defmodule OnlyBlocks.Wire do
     {version, header, r} =
       case r do
         <<1::1, 0::7, a, b, c, x::binary>> -> {0, {a, b, c}, x}
-        <<0::1, _::7, b, c, x::binary>> -> {:legacy, {:binary.first(r), b, c}, x}
+        <<a, b, c, x::binary>> when a < 0x80 -> {:legacy, {a, b, c}, x}
         <<1::1, _::7, _::binary>> -> fail("unsupported transaction version")
         _ -> fail("truncated transaction")
       end
@@ -354,16 +364,62 @@ defmodule OnlyBlocks.Wire do
     {instructions, r} = counted(r, 3, &instruction/1)
     {lookups, r} = if version == 0, do: counted(r, 34, &lookup/1), else: {nil, r}
 
-    %{
+    {%{
       version: version,
       signatures: signatures,
       header: header,
       keys: keys,
       recent: recent,
       instructions: instructions,
-      lookups: lookups,
-      raw: consumed(data, r)
+      lookups: lookups
+    }, r}
+  end
+
+  defp transaction_v1(<<a, b, c, mask::little-32, recent::binary-size(32), nix, nkeys, r::binary>>) do
+    if mask > 0x1F or (mask &&& 3) in [1, 2], do: fail("invalid transaction config mask")
+    <<key_bytes::binary-size(nkeys * 32), r::binary>> = r
+    keys = for <<key::binary-size(32) <- key_bytes>>, do: key
+    {fee, r} = config_value(mask, 3, 64, r)
+    {compute_limit, r} = config_value(mask, 4, 32, r)
+    {loaded_data_limit, r} = config_value(mask, 8, 32, r)
+    {heap_size, r} = config_value(mask, 16, 32, r)
+    config = %{
+      priorityFee: fee,
+      computeUnitLimit: compute_limit,
+      loadedAccountsDataSizeLimit: loaded_data_limit,
+      heapSize: heap_size
     }
+
+    <<header_bytes::binary-size(nix * 4), r::binary>> = r
+    headers = for <<program, na, nd::little-16 <- header_bytes>>, do: {program, na, nd}
+
+    {instructions, r} =
+      Enum.map_reduce(headers, r, fn {program, na, nd}, payload ->
+        <<accounts::binary-size(na), data::binary-size(nd), rest::binary>> = payload
+        {{program, accounts, data}, rest}
+      end)
+
+    <<sig_bytes::binary-size(a * 64), r::binary>> = r
+    signatures = for <<sig::binary-size(64) <- sig_bytes>>, do: sig
+
+    {%{
+      version: 1,
+      signatures: signatures,
+      header: {a, b, c},
+      keys: keys,
+      recent: recent,
+      instructions: instructions,
+      config: config
+    }, r}
+  end
+
+  defp transaction_v1(_), do: fail("truncated transaction")
+
+  defp config_value(mask, bits, _width, r) when (mask &&& bits) == 0, do: {nil, r}
+
+  defp config_value(_mask, _bits, width, r) do
+    <<value::little-size(width), rest::binary>> = r
+    {value, rest}
   end
 
   defp counted(bin, min, fun) do

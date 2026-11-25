@@ -223,7 +223,9 @@ instructionJson keys ix = case keys of
 accountObjects :: Tx -> ([B.ByteString], [B.ByteString]) -> [(B.ByteString, J)]
 accountObjects tx (lw, lr) = zipWith object [0 ..] keys
   where
-    (w, r) = if txV0 tx then (lw, lr) else ([], [])
+    (w, r) = case txVersion tx of
+      V0 -> (lw, lr)
+      _ -> ([], [])
     keys = txKeys tx ++ w ++ r
     ns = length (txKeys tx)
     programs = S.fromList (map ixProgram (txInstructions tx))
@@ -263,17 +265,22 @@ metaJson o keys m = do
             ++ [ ("costUnits", word v) | Just v <- [mCost m] ]
   pure (JObj' (base ++ rewardsField ++ extra))
 
-unsupportedVersion :: RpcError
-unsupportedVersion = RpcError (-32015)
-  "Transaction version (0) is not supported by the requesting client. Please try the request again with the following configuration parameter: \"maxSupportedTransactionVersion\": 0"
+unsupportedVersion :: Int -> RpcError
+unsupportedVersion version = RpcError (-32015) $
+  "Transaction version (" <> v <> ") is not supported by the requesting client. Please try the request again with the following configuration parameter: \"maxSupportedTransactionVersion\": " <> v
+  where v = BC.pack (show version)
 
 transactionJson :: Opts -> Tx -> Maybe Meta -> IO J
 transactionJson o tx meta0 = do
-  meta <- if txV0 tx
-    then do
-      when (isNothing (oMaxVersion o)) $ throwIO unsupportedVersion
+  let numericVersion = case txVersion tx of
+        Legacy -> Nothing
+        V0 -> Just 0
+        V1 _ -> Just 1
+  meta <- case numericVersion of
+    Nothing -> pure meta0
+    Just v -> do
+      when (fromMaybe (-1) (oMaxVersion o) < v) $ throwIO (unsupportedVersion v)
       pure (Just (fromMaybe emptyMeta meta0))
-    else pure meta0
   let parsed = oEncoding o == "jsonParsed"
       accountsOnly = oDetails o == "accounts"
       loaded = maybe ([], []) (\m -> (mLoadedW m, mLoadedR m)) meta
@@ -290,15 +297,22 @@ transactionJson o tx meta0 = do
           let header = [ ("header", JObj' [ ("numRequiredSignatures", int (txNrs tx))
                                           , ("numReadonlySignedAccounts", int (txNros tx))
                                           , ("numReadonlyUnsignedAccounts", int (txNrou tx)) ]) | not parsed ]
-              lookups = [ ("addressTableLookups", JArr' [ JObj' [ ("accountKey", str (base58 (lkTable l)))
-                                                               , ("writableIndexes", byteList (lkWritable l))
-                                                               , ("readonlyIndexes", byteList (lkReadonly l)) ]
-                                                       | l <- txLookups tx ]) | txV0 tx ]
+              versionFields = case txVersion tx of
+                V0 -> [ ("addressTableLookups", JArr' [ JObj' [ ("accountKey", str (base58 (lkTable l)))
+                                                             , ("writableIndexes", byteList (lkWritable l))
+                                                             , ("readonlyIndexes", byteList (lkReadonly l)) ]
+                                                     | l <- txLookups tx ]) ]
+                V1 config -> [ ("transactionConfig", JObj'
+                                 [ ("priorityFee", opt word (priorityFee config))
+                                 , ("computeUnitLimit", opt word (computeUnitLimit config))
+                                 , ("loadedAccountsDataSizeLimit", opt word (loadedAccountsDataSizeLimit config))
+                                 , ("heapSize", opt word (heapSize config)) ]) ]
+                Legacy -> []
           pure (JObj' [ signatures, ("message", JObj' (header ++ [ ("accountKeys", accountKeys)
                                                                , ("recentBlockhash", str (txRecent tx))
-                                                               , ("instructions", JArr' ixs) ] ++ lookups)) ])
+                                                               , ("instructions", JArr' ixs) ] ++ versionFields)) ])
   metaOut <- maybe (pure JNull') (orFail . metaJson o keys) meta
-  let version = [ ("version", if txV0 tx then int 0 else str "legacy") | Just _ <- [meta], Just _ <- [oMaxVersion o] ]
+  let version = [ ("version", maybe (str "legacy") int numericVersion) | Just _ <- [meta], Just _ <- [oMaxVersion o] ]
   pure (JObj' ([("transaction", transactionOut), ("meta", metaOut)] ++ version))
 
 getBlock :: Env -> Word64 -> Opts -> IO J
@@ -381,13 +395,15 @@ blockParams params = do
         _ -> invalidParams
   encoding <- choice "encoding" "json" ["json", "jsonParsed", "base64", "base58"]
   details <- choice "transactionDetails" "full" ["full", "accounts", "signatures", "none"]
-  when (details == "accounts" && encoding /= "json") invalidParams
   rewardsOn <- case field "rewards" of
     Nothing -> pure True
     Just (JBool b) -> pure b
     _ -> invalidParams
   _ <- choice "commitment" "finalized" ["finalized", "confirmed"]
   maxVersion <- traverse (fmap fromIntegral . uintParam 255) (field "maxSupportedTransactionVersion")
+  when (encoding == "base58" && fromMaybe 0 maxVersion >= 1) $
+    throwIO (RpcError (-32602) "base58 encoding is not supported with maxSupportedTransactionVersion >= 1")
+  when (details == "accounts" && encoding /= "json") invalidParams
   pure (slot, Opts encoding details rewardsOn maxVersion)
 
 idJson :: Maybe JV -> J

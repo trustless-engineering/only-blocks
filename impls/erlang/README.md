@@ -14,6 +14,7 @@ to `ebin/` with `erlc`, and `run.sh` `exec`s `erl -noshell`.
   * compact-u16: `<<1:1, A:7, 0:1, B:7, R/binary>>` when `B =/= 0`;
   * CBOR heads: `<<Major:3, Info:5, R/binary>>`;
   * v0 messages: `<<1:1, 0:7, A, B, C, X/binary>>`;
+  * v1 transactions: `<<16#81, A, B, C, ConfigMask:32/little, X/binary>>`;
   * Zstandard frame headers: `<<Fcs:2, Single:1, _:1, 0:1, Chk:1, Did:2, ...>>`.
 * **Zstandard bitstreams.** The RFC 8878 decoder reverses each backward
   bitstream (Huffman, FSE weights, sequences) once. After that, reading N
