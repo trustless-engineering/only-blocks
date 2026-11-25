@@ -69,7 +69,7 @@ impl RpcError {
             format!(
                 "Transaction version ({version}) is not supported by the requesting client. \
                  Please try the request again with the following configuration parameter: \
-                 \"maxSupportedTransactionVersion\": 0"
+                 \"maxSupportedTransactionVersion\": {version}"
             ),
         )
     }

@@ -97,7 +97,7 @@ pub const Options = struct {
     encoding: enum { json, jsonParsed, base58, base64 } = .json,
     details: enum { full, accounts, signatures, none } = .full,
     rewards: bool = true,
-    version: bool = false,
+    max_version: ?u8 = null,
 };
 const loader = "BPFLoaderUpgradeab1e11111111111111111111111";
 const reserved = std.StaticStringMap(void).initComptime(.{
@@ -133,27 +133,86 @@ const reserved = std.StaticStringMap(void).initComptime(.{
     .{ "NativeLoader1111111111111111111111111111111", {} },
     .{ "Sysvar1111111111111111111111111111111111111", {} },
 });
+const TransactionConfig = struct {
+    priorityFee: ?u64,
+    computeUnitLimit: ?u32,
+    loadedAccountsDataSizeLimit: ?u32,
+    heapSize: ?u32,
+};
+
+fn readKeys(j: J, r: *Reader, count: usize) Invalid![][]const u8 {
+    if (count > r.left.len / 32) return error.Invalid;
+    const keys = try j.a.alloc([]const u8, count);
+    for (keys) |*key| key.* = try w.pubkey(j.a, try r.take(32));
+    return keys;
+}
+
+pub const VersionError = error{ UnsupportedV0, UnsupportedV1 };
+
 pub const Tx = struct {
-    v0: bool,
+    version: ?u8,
     header: [3]u8,
     signatures: []const u8,
     keys: []const []const u8,
     blockhash: []const u8,
     instructions: []const Instruction,
-    lookups: V,
+    lookups: V = .null,
+    config: ?TransactionConfig = null,
     raw: []const u8,
+
+    fn readV1(j: J, r: *Reader, p: []const u8) Invalid!Tx {
+        const header = [3]u8{ try r.byte(), try r.byte(), try r.byte() };
+        const mask = try r.int(u32);
+        const fee_bits = mask & 3;
+        if ((mask & ~@as(u32, 0x1f)) != 0 or (fee_bits != 0 and fee_bits != 3)) return error.Invalid;
+        const hash = try w.pubkey(j.a, try r.take(32));
+        const instruction_count: usize = try r.byte();
+        const key_count = try r.byte();
+        const keys = try readKeys(j, r, key_count);
+        const config: TransactionConfig = .{
+            .priorityFee = if ((mask & 3) != 0) try r.int(u64) else null,
+            .computeUnitLimit = if ((mask & 4) != 0) try r.int(u32) else null,
+            .loadedAccountsDataSizeLimit = if ((mask & 8) != 0) try r.int(u32) else null,
+            .heapSize = if ((mask & 16) != 0) try r.int(u32) else null,
+        };
+        var headers = Reader{ .left = try r.take(instruction_count * 4) };
+        const instructions = try j.a.alloc(Instruction, instruction_count);
+        for (instructions) |*ix| {
+            const program = try headers.byte();
+            const account_count = try headers.byte();
+            const data_len = try headers.int(u16);
+            ix.* = .{
+                .program = program,
+                .accounts = try r.take(account_count),
+                .data = try r.take(data_len),
+                .stack = 1,
+            };
+        }
+        const signatures = try r.take(@as(usize, header[0]) * 64);
+        return .{
+            .version = 1,
+            .header = header,
+            .signatures = signatures,
+            .keys = keys,
+            .blockhash = hash,
+            .instructions = instructions,
+            .config = config,
+            .raw = p[0 .. p.len - r.left.len],
+        };
+    }
 
     pub fn read(j: J, p: []const u8) Invalid!Tx {
         var r = Reader{ .left = p };
-        const signatures = try r.take((try r.compact()) * 64);
+        const discriminator = try r.byte();
+        if (discriminator == 0x81) return readV1(j, &r, p);
+        if (discriminator >= 0x80) return error.Invalid;
+        const signatures = try r.take(@as(usize, discriminator) * 64);
         const prefix = try r.byte();
         if (prefix > 128) return error.Invalid;
         const v0 = prefix == 128;
         const header = [3]u8{ if (v0) try r.byte() else prefix, try r.byte(), try r.byte() };
         const key_count = try r.compact();
-        if (key_count > r.left.len / 32) return error.Invalid;
-        const keys = try j.a.alloc([]const u8, key_count);
-        for (keys) |*key| key.* = try w.pubkey(j.a, try r.take(32));
+        const keys = try readKeys(j, &r, key_count);
         const hash = try w.pubkey(j.a, try r.take(32));
         const instruction_count = try r.compact();
         if (instruction_count > r.left.len / 3) return error.Invalid;
@@ -171,7 +230,7 @@ pub const Tx = struct {
             }
         }
         return .{
-            .v0 = v0,
+            .version = if (v0) 0 else null,
             .header = header,
             .signatures = signatures,
             .keys = keys,
@@ -202,9 +261,12 @@ pub const Tx = struct {
         }
         return out;
     }
-    pub fn json(tx: Tx, j: J, metadata: ?Meta, options: Options) (Invalid || error{UnsupportedVersion})!V {
-        const meta = metadata orelse if (tx.v0) Meta{} else null;
-        if (tx.v0 and !options.version) return error.UnsupportedVersion;
+    pub fn json(tx: Tx, j: J, metadata: ?Meta, options: Options) (Invalid || VersionError)!V {
+        const meta = metadata orelse if (tx.version != null) Meta{} else null;
+        if (tx.version) |version| {
+            if (options.max_version == null or version > options.max_version.?)
+                return if (version == 0) error.UnsupportedV0 else error.UnsupportedV1;
+        }
         var resolved: ?[]const []const u8 = null;
         const value = blk: {
             switch (options.encoding) {
@@ -217,7 +279,7 @@ pub const Tx = struct {
             while (p.len > 0) : (p = p[64..]) try j.append(&signatures, try w.base58(j.a, p[0..64]));
             const parsed = options.encoding == .jsonParsed;
             const account_keys = if (parsed or options.details == .accounts) keys: {
-                const loaded = if (tx.v0) meta.? else Meta{};
+                const loaded = if (tx.version == 0) meta.? else Meta{};
                 const keys = try std.mem.concat(j.a, []const u8, &.{ tx.keys, loaded.writable, loaded.readonly });
                 if (parsed) resolved = keys;
                 break :keys try tx.accountList(j, keys, loaded.writable.len);
@@ -229,12 +291,13 @@ pub const Tx = struct {
             if (!parsed) {
                 try j.put(&message, "header", .{ .numRequiredSignatures = tx.header[0], .numReadonlySignedAccounts = tx.header[1], .numReadonlyUnsignedAccounts = tx.header[2] });
             }
-            if (tx.v0) try j.put(&message, "addressTableLookups", tx.lookups);
+            if (tx.version == 0) try j.put(&message, "addressTableLookups", tx.lookups);
+            if (tx.config) |config| try j.put(&message, "transactionConfig", config);
             break :blk try j.obj(.{ .signatures = signatures, .message = message });
         };
         var out = try j.obj(.{ .transaction = value, .meta = if (meta) |m| try m.json(j, options, resolved) else .null });
-        if (meta != null and options.version) {
-            if (tx.v0) try j.put(&out, "version", 0) else try j.put(&out, "version", "legacy");
+        if (meta != null and options.max_version != null) {
+            if (tx.version) |version| try j.put(&out, "version", version) else try j.put(&out, "version", "legacy");
         }
         return out;
     }

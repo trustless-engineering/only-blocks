@@ -1,4 +1,4 @@
-//! Solana `VersionedTransaction` wire format with compact-u16 lengths (WIRE_FORMATS.md §8).
+//! Solana legacy, v0 and v1 transaction wire formats (WIRE_FORMATS.md §8).
 
 use crate::bail;
 use crate::error::DResult;
@@ -19,9 +19,17 @@ pub struct AddressTableLookup {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TransactionConfig {
+    pub priority_fee: Option<u64>,
+    pub compute_unit_limit: Option<u32>,
+    pub loaded_accounts_data_size_limit: Option<u32>,
+    pub heap_size: Option<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VersionedTransaction {
     pub signatures: Vec<[u8; 64]>,
-    /// `None` for a legacy message, `Some(0)` for v0.
+    /// `None` for a legacy message, `Some(0)` for v0, `Some(1)` for v1.
     pub version: Option<u8>,
     /// `num_required_signatures`, `num_readonly_signed_accounts`, `num_readonly_unsigned_accounts`.
     pub header: [u8; 3],
@@ -29,6 +37,7 @@ pub struct VersionedTransaction {
     pub recent_blockhash: [u8; 32],
     pub instructions: Vec<CompiledInstruction>,
     pub address_table_lookups: Vec<AddressTableLookup>,
+    pub config: Option<TransactionConfig>,
     /// Bytes consumed by the parser: the canonical re-serialization used by base58/base64.
     pub wire_len: usize,
 }
@@ -97,12 +106,18 @@ impl<'a> Cursor<'a> {
     }
 }
 
-fn keys(c: &mut Cursor<'_>) -> DResult<Vec<Pubkey>> {
-    let n = c.compact_u16()? as usize;
+fn keys(c: &mut Cursor<'_>, n: usize) -> DResult<Vec<Pubkey>> {
     if n * 32 > c.remaining() {
         bail!("truncated account keys");
     }
     (0..n).map(|_| c.array::<32>()).collect()
+}
+
+fn signatures(c: &mut Cursor<'_>, n: usize) -> DResult<Vec<[u8; 64]>> {
+    if n * 64 > c.remaining() {
+        bail!("truncated signatures");
+    }
+    (0..n).map(|_| c.array::<64>()).collect()
 }
 
 pub fn parse_compiled_instruction(c: &mut Cursor<'_>) -> DResult<CompiledInstruction> {
@@ -112,13 +127,56 @@ pub fn parse_compiled_instruction(c: &mut Cursor<'_>) -> DResult<CompiledInstruc
     Ok(CompiledInstruction { program_id_index, accounts, data })
 }
 
+fn parse_v1(mut c: Cursor<'_>) -> DResult<VersionedTransaction> {
+    let header = c.array::<3>()?;
+    let mask = u32::from_le_bytes(c.array()?);
+    if mask & !0x1f != 0 || matches!(mask & 3, 1 | 2) {
+        bail!("invalid v1 transaction config mask");
+    }
+    let recent_blockhash = c.array()?;
+    let instruction_count = usize::from(c.u8()?);
+    let key_count = usize::from(c.u8()?);
+    let account_keys = keys(&mut c, key_count)?;
+    let priority_fee = if mask & 3 != 0 { Some(u64::from_le_bytes(c.array()?)) } else { None };
+    let mut config_u32 = |bit| {
+        (mask & bit != 0).then(|| c.array().map(u32::from_le_bytes)).transpose()
+    };
+    let config = TransactionConfig {
+        priority_fee,
+        compute_unit_limit: config_u32(4)?,
+        loaded_accounts_data_size_limit: config_u32(8)?,
+        heap_size: config_u32(16)?,
+    };
+    let instruction_headers = c.bytes(instruction_count * 4)?;
+    let mut instructions = Vec::with_capacity(instruction_count);
+    for h in instruction_headers.chunks_exact(4) {
+        let accounts = c.bytes(usize::from(h[1]))?.to_vec();
+        let data = c.bytes(usize::from(u16::from_le_bytes([h[2], h[3]])))?.to_vec();
+        instructions.push(CompiledInstruction { program_id_index: h[0], accounts, data });
+    }
+    let signatures = signatures(&mut c, usize::from(header[0]))?;
+    Ok(VersionedTransaction {
+        signatures,
+        version: Some(1),
+        header,
+        account_keys,
+        recent_blockhash,
+        instructions,
+        address_table_lookups: Vec::new(),
+        config: Some(config),
+        wire_len: c.pos,
+    })
+}
+
 pub fn parse_versioned_transaction(bytes: &[u8]) -> DResult<VersionedTransaction> {
     let mut c = Cursor::new(bytes);
-    let num_sigs = c.compact_u16()? as usize;
-    if num_sigs * 64 > c.remaining() {
-        bail!("truncated signatures");
+    let num_sigs = c.u8()?;
+    match num_sigs {
+        0x81 => return parse_v1(c),
+        0x80..=0xff => bail!("invalid transaction discriminator {num_sigs:#x}"),
+        _ => {}
     }
-    let signatures = (0..num_sigs).map(|_| c.array::<64>()).collect::<DResult<Vec<_>>>()?;
+    let signatures = signatures(&mut c, usize::from(num_sigs))?;
     let prefix = c.u8()?;
     let version = if prefix & 0x80 == 0 {
         c.pos -= 1; // legacy: the prefix is num_required_signatures
@@ -131,7 +189,8 @@ pub fn parse_versioned_transaction(bytes: &[u8]) -> DResult<VersionedTransaction
         }
     };
     let header = [c.u8()?, c.u8()?, c.u8()?];
-    let account_keys = keys(&mut c)?;
+    let key_count = usize::from(c.compact_u16()?);
+    let account_keys = keys(&mut c, key_count)?;
     let recent_blockhash = c.array::<32>()?;
     let n = c.compact_u16()? as usize;
     let mut instructions = Vec::with_capacity(n.min(c.remaining()));
@@ -157,6 +216,7 @@ pub fn parse_versioned_transaction(bytes: &[u8]) -> DResult<VersionedTransaction
         recent_blockhash,
         instructions,
         address_table_lookups,
+        config: None,
         wire_len: c.pos,
     })
 }

@@ -43,7 +43,7 @@ concurrency, cache sizes, retries and timeouts.
 matching the libzstd-based oracle. |
 | prost | `proto.rs`: a protobuf wire reader with prost semantics. Packed and unpacked repeated fields mix, sub-messages are merged field by field, groups are skipped, and wrong wire types are rejected. |
 | bincode | `bincode.rs`: fixint bincode that reproduces `SliceReader` + `default_on_eof` exactly (fixed-width EOF does not consume, and a truncated string never defaults), all four legacy metadata layouts, and the 39/54-variant `TransactionError`/`InstructionError` enums. |
-| solana-* | `tx.rs`: a canonical compact-u16 `VersionedTransaction` parser. `encode.rs`: the full `getBlock` JSON (§13), with signer/writable/demotion flags against the 31 reserved keys. `codec.rs`: Base58 using base-58⁵ limbs and three input bytes per pass, Base64, `uiAmountString`. |
+| solana-* | `tx.rs`: the legacy, v0 and v1 `VersionedTransaction` parser. `encode.rs`: the full `getBlock` JSON (§13), with signer/writable/demotion flags against the 31 reserved keys. `codec.rs`: Base58 using base-58⁵ limbs and three input bytes per pass, Base64, `uiAmountString`. |
 
 ## Robustness
 

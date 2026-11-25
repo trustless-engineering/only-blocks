@@ -94,7 +94,7 @@ static void keys_init(ctx_t *c, keys_t *k, const txm_t *t) {
     k->meta = t->meta;
     k->nw = 0;
     k->total = t->tx.nkeys;
-    if (t->tx.v0 && t->meta) {
+    if (t->tx.version == 0 && t->meta) {
         k->nw = t->meta->loaded_w.n;
         k->total += t->meta->loaded_w.n + t->meta->loaded_r.n;
     }
@@ -342,12 +342,28 @@ static void emit_signatures(ctx_t *c, jw_t *w, const tx_t *tx) {
     jw_end_arr(w);
 }
 
+static void emit_config_value(jw_t *w, const char *name, bool present, uint64_t value) {
+    jw_key(w, name);
+    if (present) jw_u64(w, value);
+    else jw_null(w);
+}
+
+static void emit_transaction_config(jw_t *w, const tx_t *tx) {
+    jw_key(w, "transactionConfig");
+    jw_obj(w);
+    emit_config_value(w, "priorityFee", tx->config_mask & 3, tx->priority_fee);
+    emit_config_value(w, "computeUnitLimit", tx->config_mask & 4, tx->compute_unit_limit);
+    emit_config_value(w, "loadedAccountsDataSizeLimit", tx->config_mask & 8, tx->loaded_accounts_data_size_limit);
+    emit_config_value(w, "heapSize", tx->config_mask & 16, tx->heap_size);
+    jw_end_obj(w);
+}
+
 static void emit_tx(ctx_t *c, jw_t *w, const block_opts_t *o, const txm_t *t) {
     const tx_t *tx = &t->tx;
-    if (!t->missing && tx->v0 && o->max_version < 0)
+    if (!t->missing && tx->version >= 0 && o->max_version < tx->version)
         fail(c, E_VERSION,
-             "Transaction version (0) is not supported by the requesting client. Please try the request again with the "
-             "following configuration parameter: \"maxSupportedTransactionVersion\": 0");
+             "Transaction version (%d) is not supported by the requesting client. Please try the request again with the "
+             "following configuration parameter: \"maxSupportedTransactionVersion\": %d", tx->version, tx->version);
     bool parsed = o->encoding == ENC_PARSED, accounts = o->details == TD_ACCOUNTS;
     keys_t keys;
     if (parsed || accounts) keys_init(c, &keys, t);
@@ -398,7 +414,7 @@ static void emit_tx(ctx_t *c, jw_t *w, const block_opts_t *o, const txm_t *t) {
         for (size_t i = 0; i < tx->nix; i++)
             emit_instruction(c, w, parsed ? &keys : NULL, tx->ix[i].program, tx->ix[i].accounts, tx->ix[i].data, true, 1);
         jw_end_arr(w);
-        if (tx->v0) {
+        if (tx->version == 0) {
             jw_key(w, "addressTableLookups");
             jw_arr(w);
             for (size_t i = 0; i < tx->nlookups; i++) {
@@ -412,6 +428,8 @@ static void emit_tx(ctx_t *c, jw_t *w, const block_opts_t *o, const txm_t *t) {
                 jw_end_obj(w);
             }
             jw_end_arr(w);
+        } else if (tx->version == 1) {
+            emit_transaction_config(w, tx);
         }
         jw_end_obj(w);
         jw_end_obj(w);
@@ -421,7 +439,7 @@ static void emit_tx(ctx_t *c, jw_t *w, const block_opts_t *o, const txm_t *t) {
     else emit_meta(c, w, o, t->meta, parsed ? &keys : NULL);
     if (!t->missing && o->max_version >= 0) {
         jw_key(w, "version");
-        if (tx->v0) jw_u64(w, 0);
+        if (tx->version >= 0) jw_u64(w, (uint64_t)tx->version);
         else jw_cstr(w, "legacy");
     }
     jw_end_obj(w);
@@ -472,7 +490,7 @@ void get_block(ctx_t *c, archive_t *a, const block_opts_t *o, jw_t *w) {
                     continue;
                 }
                 meta_t *m = has_md ? decode_metadata(c, o->slot, reassemble(c, &car, &mdf)) : NULL;
-                if (!m && t->tx.v0) m = acalloc(c, 1, sizeof *m); /* default_meta */
+                if (!m && t->tx.version >= 0) m = acalloc(c, 1, sizeof *m); /* default_meta */
                 t->meta = m;
                 t->missing = m == NULL;
                 txs.n++;

@@ -308,6 +308,13 @@ pub fn parse_get_block_params(params: Option<&Json>) -> Result<GetBlockParams, R
         }
         Some(_) => return Err(invalid("second parameter must be a config object or encoding string")),
     }
+    if options.encoding == Encoding::Base58
+        && options.max_supported_transaction_version.is_some_and(|v| v >= 1)
+    {
+        return Err(RpcError::invalid_params(
+            "base58 encoding is not supported with maxSupportedTransactionVersion >= 1",
+        ));
+    }
     if options.details == Details::Accounts && options.encoding != Encoding::Json {
         return Err(invalid("transactionDetails 'accounts' requires encoding 'json'"));
     }

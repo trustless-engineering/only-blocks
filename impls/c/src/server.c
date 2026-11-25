@@ -85,7 +85,6 @@ static bool block_params(const jv *params, block_opts_t *o) {
     if ((v = json_get(cfg, "commitment")) && v->kind != J_NULL && !json_str_is(v, "finalized") &&
         !json_str_is(v, "confirmed"))
         return false;
-    if (o->details == TD_ACCOUNTS && o->encoding != ENC_JSON) return false;
     return true;
 }
 
@@ -144,6 +143,14 @@ static void dispatch(ctx_t *item, const jv *req, sb_t *out) {
     }
     block_opts_t opts;
     if (!block_params(params, &opts)) {
+        write_error(out, E_PARAMS, "Invalid params", idp, idn);
+        return;
+    }
+    if (opts.encoding == ENC_BASE58 && opts.max_version >= 1) {
+        write_error(out, E_PARAMS, "base58 encoding is not supported with maxSupportedTransactionVersion >= 1", idp, idn);
+        return;
+    }
+    if (opts.details == TD_ACCOUNTS && opts.encoding != ENC_JSON) {
         write_error(out, E_PARAMS, "Invalid params", idp, idn);
         return;
     }

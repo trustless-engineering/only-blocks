@@ -22,7 +22,7 @@ Everything else is in `src/`:
 | `server.c` | CLI and env, listener, one detached pthread per connection, HTTP/1.1 framing (`Content-Length`, chunked, `Expect: 100-continue`, 413/404/405), JSON-RPC 2.0 envelope and batches |
 | `json.c` | strict RFC 8259 parser that keeps number and string **lexemes**, so ids echo byte for byte and `1.0`, `1e3` and `-0` are never mistaken for slots. Depth-limited to 128 levels |
 | `upstream.c` | Range client with the §4.3 retry policy (`Retry-After` as delta-seconds or HTTP-date, jittered backoff), a 32-slot semaphore held only during an attempt, and two O(1) LRUs (`slot → range`, `slot → blockhash`, 100 000 entries each) |
-| `ipld.c` | CARv1 sections, CIDv0/v1, DAG-CBOR (tags dropped, so tag-42 links are plain byte strings), Old Faithful nodes, DataFrame DFS reassembly with cycle detection, and the `VersionedTransaction` parser |
+| `ipld.c` | CARv1 sections, CIDv0/v1, DAG-CBOR (tags dropped, so tag-42 links are plain byte strings), Old Faithful nodes, DataFrame DFS reassembly with cycle detection, and the legacy, v0 and v1 `VersionedTransaction` parser |
 | `meta.c` | protobuf with prost semantics (packed and unpacked fields, message merging, groups, wire-type checks), bincode with the reference's `default_on_eof` quirks, and the §9 zstd/codec fallback |
 | `zstd.c` | the full RFC 8878 decoder: Raw/RLE/Compressed blocks, 1- and 4-stream Huffman (FSE and direct weights, treeless), all four FSE modes, repeat offsets, XXH64 checksums, skippable and concatenated frames, and the 512 MiB limit |
 | `block.c` | the getBlock pipeline (§4.5) and the exact §13 JSON, including signer/writable/demotion flags |

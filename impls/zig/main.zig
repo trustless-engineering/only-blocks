@@ -21,7 +21,7 @@ const Hash = struct {
         return hash;
     }
 };
-const ArchiveError = w.Invalid || error{ Unarchived, Skipped, UnsupportedVersion };
+const ArchiveError = w.Invalid || tx.VersionError || error{ Unarchived, Skipped };
 fn Cache(comptime T: type) type {
     return struct {
         const Self = @This();
@@ -301,16 +301,12 @@ fn blockParams(p: V) ?tx.Options {
     if (encoding != .null) o.encoding = std.meta.stringToEnum(@TypeOf(o.encoding), js.text(encoding)) orelse return null;
     const details = at(config, "transactionDetails");
     if (details != .null) o.details = std.meta.stringToEnum(@TypeOf(o.details), js.text(details)) orelse return null;
-    if (o.details == .accounts and o.encoding != .json) return null;
     const commitment = at(config, "commitment");
     if (commitment != .null and !js.is(commitment, "finalized") and !js.is(commitment, "confirmed")) return null;
     const rewards = at(config, "rewards");
     if (rewards != .null) o.rewards = if (rewards == .bool) rewards.bool else return null;
     const version = at(config, "maxSupportedTransactionVersion");
-    if (version != .null) {
-        _ = js.num(u8, version) orelse return null;
-        o.version = true;
-    }
+    if (version != .null) o.max_version = js.num(u8, version) orelse return null;
     return o;
 }
 fn rpcError(j: J, id: V, code: i32, message: []const u8) w.Invalid!V {
@@ -331,10 +327,15 @@ fn dispatch(s: *Archive, j: J, p: V) w.Invalid!V {
         }
         if (js.is(method, "getBlock")) {
             const o = blockParams(params) orelse return rpcError(j, id, -32602, "Invalid getBlock params");
+            if (o.encoding == .base58 and (o.max_version orelse 0) >= 1)
+                return rpcError(j, id, -32602, "base58 encoding is not supported with maxSupportedTransactionVersion >= 1");
+            if (o.details == .accounts and o.encoding != .json)
+                return rpcError(j, id, -32602, "Invalid getBlock params");
             break :blk s.block(j, o) catch |err| return switch (err) {
                 error.Unarchived => rpcError(j, id, -32004, "Block not available"),
                 error.Skipped => rpcError(j, id, -32007, "Slot was skipped"),
-                error.UnsupportedVersion => rpcError(j, id, -32015, "Transaction version (0) requires maxSupportedTransactionVersion: 0"),
+                error.UnsupportedV0 => rpcError(j, id, -32015, "Transaction version (0) requires maxSupportedTransactionVersion: 0"),
+                error.UnsupportedV1 => rpcError(j, id, -32015, "Transaction version (1) requires maxSupportedTransactionVersion: 1"),
                 else => rpcError(j, id, -32603, "Archive read or decode failed"),
             };
         }
