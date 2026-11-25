@@ -216,16 +216,21 @@ public final class Server {
         else throw invalidParams();
         String encoding = enumParam(cfg, "encoding", "json", "json", "jsonParsed", "base64", "base58");
         String details = enumParam(cfg, "transactionDetails", "full", "full", "accounts", "signatures", "none");
-        if (details.equals("accounts") && !encoding.equals("json")) throw invalidParams();
         enumParam(cfg, "commitment", "finalized", "finalized", "confirmed");
         Object rewards = cfg.get("rewards");
         if (rewards != null && !(rewards instanceof Boolean)) throw invalidParams();
+        Integer maxVersion = null;
         Object max = cfg.get("maxSupportedTransactionVersion");
         if (max != null) {
             Long version = unsigned(max);
             if (version == null || Long.compareUnsigned(version, 255) > 0) throw invalidParams();
+            maxVersion = version.intValue();
+            if (encoding.equals("base58") && maxVersion >= 1) {
+                throw new RpcError(-32602, "base58 encoding is not supported with maxSupportedTransactionVersion >= 1");
+            }
         }
-        return archive.block(slot, new Solana.Options(encoding, details, !Boolean.FALSE.equals(rewards), max != null));
+        if (details.equals("accounts") && !encoding.equals("json")) throw invalidParams();
+        return archive.block(slot, new Solana.Options(encoding, details, !Boolean.FALSE.equals(rewards), maxVersion));
     }
     private static Object error(Object id, int code, String message) {
         return obj("jsonrpc", "2.0", "id", id, "error", obj("code", code, "message", message));

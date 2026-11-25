@@ -11,8 +11,10 @@ internal fun Bytes.instruction(height: Long?) = Instruction(u8(), bytes(short())
 internal data class Inner(val index: Int, val instructions: List<Instruction>)
 
 internal class Transaction(bytes: ByteArray) {
+    private data class InstructionHeader(val program: Int, val accounts: Int, val dataLength: Int)
+
     val signatures: List<ByteArray>
-    private val versioned: Boolean
+    private val version: Int?
     private val signers: Int
     private val readonlySigned: Int
     private val readonlyUnsigned: Int
@@ -20,32 +22,62 @@ internal class Transaction(bytes: ByteArray) {
     private val hash: String
     private val instructions: List<Instruction>
     private val lookups: List<Obj>?
+    private val config: Obj?
     private val raw: ByteArray
     init {
         val r = Bytes(bytes)
-        signatures = List(r.short()) { r.bytes(64) }
-        val prefix = r.u8()
-        versioned = prefix >= 128
-        requireWire(prefix <= 128, "Unknown transaction version")
-        signers = if (versioned) r.u8() else prefix
-        readonlySigned = r.u8()
-        readonlyUnsigned = r.u8()
-        keys = List(r.short()) { r.bytes(32).b58() }
-        hash = r.bytes(32).b58()
-        instructions = List(r.short()) { r.instruction(1) }
-        lookups = if (versioned) List(r.short()) { obj("accountKey" to r.bytes(32).b58(),
-            "writableIndexes" to r.bytes(r.short()).indicesList(),
-            "readonlyIndexes" to r.bytes(r.short()).indicesList()) } else null
+        val first = r.u8()
+        if (first == 0x81) {
+            version = 1
+            signers = r.u8()
+            readonlySigned = r.u8()
+            readonlyUnsigned = r.u8()
+            val mask = r.u32().toInt()
+            val priorityBits = mask and 3
+            requireWire((mask and 0x1f.inv()) == 0 && (priorityBits == 0 || priorityBits == 3),
+                "Invalid transaction config mask")
+            hash = r.bytes(32).b58()
+            val numInstructions = r.u8()
+            keys = List(r.u8()) { r.bytes(32).b58() }
+            config = obj(
+                "priorityFee" to if (priorityBits == 3) unsigned(r.u64()) else null,
+                "computeUnitLimit" to if ((mask and 4) != 0) r.u32() else null,
+                "loadedAccountsDataSizeLimit" to if ((mask and 8) != 0) r.u32() else null,
+                "heapSize" to if ((mask and 16) != 0) r.u32() else null)
+            val headers = List(numInstructions) { InstructionHeader(r.u8(), r.u8(), r.le(2).toInt()) }
+            instructions = headers.map { Instruction(it.program, r.bytes(it.accounts), r.bytes(it.dataLength), 1) }
+            signatures = List(signers) { r.bytes(64) }
+            lookups = null
+        } else {
+            requireWire(first < 0x80, "Invalid transaction discriminator")
+            signatures = List(first) { r.bytes(64) }
+            val prefix = r.u8()
+            requireWire(prefix <= 0x80, "Unknown transaction message version")
+            val v0 = prefix == 0x80
+            version = if (v0) 0 else null
+            signers = if (v0) r.u8() else prefix
+            readonlySigned = r.u8()
+            readonlyUnsigned = r.u8()
+            keys = List(r.short()) { r.bytes(32).b58() }
+            hash = r.bytes(32).b58()
+            instructions = List(r.short()) { r.instruction(1) }
+            lookups = if (v0) List(r.short()) { obj("accountKey" to r.bytes(32).b58(),
+                "writableIndexes" to r.bytes(r.short()).indicesList(),
+                "readonlyIndexes" to r.bytes(r.short()).indicesList()) } else null
+            config = null
+        }
         raw = bytes.copyOf(r.pos)
     }
 
     fun json(input: Meta?, options: BlockOptions): Obj {
-        val meta = input ?: if (versioned) Meta() else null
-        if (versioned && options.maxVersion == null) throw RpcFailure(-32015, "Transaction version 0 requires maxSupportedTransactionVersion")
+        if (version != null && (options.maxVersion == null || version.toULong() > options.maxVersion)) {
+            throw RpcFailure(-32015, "Transaction version ($version) requires maxSupportedTransactionVersion >= $version")
+        }
+        val meta = input ?: if (version != null) Meta() else null
         val parsed = options.encoding == "jsonParsed"
         val accountsOnly = options.details == "accounts"
-        val loadedWritable = if (versioned) meta?.writable.orEmpty() else emptyList()
-        val combined = keys + loadedWritable + if (versioned) meta?.readonly.orEmpty() else emptyList()
+        val loadedWritable = if (version == 0) meta?.writable.orEmpty() else emptyList()
+        val combined = keys + loadedWritable + if (version == 0) meta?.readonly.orEmpty() else emptyList()
         val parsedKeys = if (parsed) combined else null
         val accounts = if (parsed || accountsOnly) {
             val programs = instructions.map { it.program }.toSet()
@@ -74,13 +106,14 @@ internal class Transaction(bytes: ByteArray) {
                     if (!parsed) message["header"] = obj("numRequiredSignatures" to signers,
                         "numReadonlySignedAccounts" to readonlySigned, "numReadonlyUnsignedAccounts" to readonlyUnsigned)
                     if (lookups != null) message["addressTableLookups"] = lookups
+                    if (config != null) message["transactionConfig"] = config
                     result["message"] = message
                 }
                 result
             }
         }
         val out = obj("transaction" to transaction, "meta" to meta?.json(options, parsedKeys))
-        if (meta != null && options.maxVersion != null) out["version"] = if (versioned) 0 else "legacy"
+        if (meta != null && options.maxVersion != null) out["version"] = version ?: "legacy"
         return out
     }
 }
