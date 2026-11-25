@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
+# Start the server in the foreground; `exec` hands SIGINT/SIGTERM straight to it.
 set -euo pipefail
-
 DIR="$(cd "$(dirname "$0")" && pwd)"
-if [[ ! -x "$DIR/target/release/onlyblocks" ]]; then
-    "$DIR/build.sh"
+BIN="$DIR/target/release/onlyblocks"
+if [[ ! -x "$BIN" ]]; then
+    bash "$DIR/build.sh" >&2
 fi
-exec "$DIR/target/release/onlyblocks" "$@"
+exec "$BIN" "$@"
