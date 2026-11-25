@@ -24,30 +24,74 @@ final class Transaction
     ];
 
     public readonly array $signatures;
-    public readonly bool $v0;
+    public readonly int|string $version;
     private readonly int $required, $readonlySigned, $readonlyUnsigned;
     private readonly array $keys, $instructions, $lookups;
+    private readonly ?array $transactionConfig;
     private readonly string $recent, $raw;
 
     public function __construct(string $bytes)
     {
         $r = new Reader($bytes);
-        $this->signatures = $r->items($r->compact(), 64, fn() => $r->take(64));
+        $discriminator = $r->u8();
+        if ($discriminator === 0x81) {
+            $this->readV1($r);
+        } else {
+            require_valid($discriminator < 0x80, 'Invalid transaction discriminator');
+            $this->readLegacyOrV0($r, $discriminator);
+        }
+        $this->raw = substr($bytes, 0, $r->pos);
+    }
+
+    private function readLegacyOrV0(Reader $r, int $signatureCount): void
+    {
+        $this->signatures = $r->items($signatureCount, 64, fn() => $r->take(64));
         $prefix = $r->u8();
-        $this->v0 = ($prefix & 128) !== 0;
-        require_valid(!$this->v0 || $prefix === 128, 'Unsupported transaction message version');
-        $this->required = $this->v0 ? $r->u8() : $prefix;
+        require_valid($prefix <= 0x80, 'Unsupported transaction message version');
+        $v0 = $prefix === 0x80;
+        $this->version = $v0 ? 0 : 'legacy';
+        $this->required = $v0 ? $r->u8() : $prefix;
         $this->readonlySigned = $r->u8();
         $this->readonlyUnsigned = $r->u8();
         $this->keys = $r->items($r->compact(), 32, fn() => $r->take(32));
         $this->recent = $r->take(32);
         $this->instructions = $r->items($r->compact(), 3, fn() => Instruction::read($r, 1));
-        $this->lookups = $this->v0 ? $r->items($r->compact(), 34, fn() => [
+        $this->lookups = $v0 ? $r->items($r->compact(), 34, fn() => [
             'accountKey' => $r->take(32),
             'writableIndexes' => $r->take($r->compact()),
             'readonlyIndexes' => $r->take($r->compact()),
         ]) : [];
-        $this->raw = substr($bytes, 0, $r->pos);
+        $this->transactionConfig = null;
+    }
+
+    private function readV1(Reader $r): void
+    {
+        $this->version = 1;
+        $this->required = $r->u8();
+        $this->readonlySigned = $r->u8();
+        $this->readonlyUnsigned = $r->u8();
+        $mask = $r->u32();
+        $priorityBits = $mask & 0x03;
+        require_valid($mask <= 0x1f && ($priorityBits === 0 || $priorityBits === 0x03),
+            'Invalid v1 transaction config mask');
+        $this->recent = $r->take(32);
+        $instructionCount = $r->u8();
+        $this->keys = $r->items($r->u8(), 32, fn() => $r->take(32));
+        $this->transactionConfig = [
+            'priorityFee' => $priorityBits === 0x03 ? unsigned_json($r->u64()) : null,
+            'computeUnitLimit' => ($mask & 0x04) ? $r->u32() : null,
+            'loadedAccountsDataSizeLimit' => ($mask & 0x08) ? $r->u32() : null,
+            'heapSize' => ($mask & 0x10) ? $r->u32() : null,
+        ];
+        // All headers precede the payloads, which are laid out in instruction order.
+        $headers = $r->items($instructionCount, 4, fn() => [$r->u8(), $r->u8(), $r->le(2)]);
+        $instructions = [];
+        foreach ($headers as [$program, $accountCount, $dataLength]) {
+            $instructions[] = new Instruction($program, $r->take($accountCount), $r->take($dataLength), 1);
+        }
+        $this->instructions = $instructions;
+        $this->signatures = $r->items($this->required, 64, fn() => $r->take(64));
+        $this->lookups = [];
     }
 
     private function accounts(array $combined, int $writableLoaded): array
@@ -81,10 +125,11 @@ final class Transaction
         } else {
             $signatures = array_map('base58', $this->signatures);
             $statics = array_map('base58', $this->keys);
-            $combined = $this->v0 && $meta !== null && ($accounts || $parsed)
+            $v0 = $this->version === 0;
+            $combined = $v0 && $meta !== null && ($accounts || $parsed)
                 ? array_merge($statics, $meta->writable, $meta->readonly) : $statics;
             if ($parsed) $parsedKeys = $combined;
-            $accountKeys = $accounts || $parsed ? $this->accounts($combined, $this->v0 ? count($meta?->writable ?? []) : 0) : $statics;
+            $accountKeys = $accounts || $parsed ? $this->accounts($combined, $v0 ? count($meta?->writable ?? []) : 0) : $statics;
             if ($accounts) $transaction = compact('signatures', 'accountKeys');
             else {
                 $message = [
@@ -96,16 +141,17 @@ final class Transaction
                     'numReadonlySignedAccounts' => $this->readonlySigned,
                     'numReadonlyUnsignedAccounts' => $this->readonlyUnsigned,
                 ];
-                if ($this->v0) $message['addressTableLookups'] = array_map(static fn(array $lookup) => [
+                if ($v0) $message['addressTableLookups'] = array_map(static fn(array $lookup) => [
                     'accountKey' => base58($lookup['accountKey']),
                     'writableIndexes' => Instruction::indices($lookup['writableIndexes']),
                     'readonlyIndexes' => Instruction::indices($lookup['readonlyIndexes']),
                 ], $this->lookups);
+                if ($this->transactionConfig !== null) $message['transactionConfig'] = $this->transactionConfig;
                 $transaction = compact('signatures', 'message');
             }
         }
         $result = ['transaction' => $transaction, 'meta' => $meta?->json($accounts, $parsedKeys, $options->rewards)];
-        if ($meta !== null && $options->hasVersion) $result['version'] = $this->v0 ? 0 : 'legacy';
+        if ($meta !== null && $options->maxVersion !== null) $result['version'] = $this->version;
         return $result;
     }
 }

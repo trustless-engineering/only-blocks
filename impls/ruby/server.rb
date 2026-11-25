@@ -85,8 +85,10 @@ module OnlyBlocks
 
     def transaction_json(tx, meta, encoding, details, include_rewards, max_version)
       version, signatures, message, raw = tx
-      if version == 0
-        raise RpcError.new(-32015, 'Transaction version (0) requires "maxSupportedTransactionVersion": 0') if max_version.nil?
+      if version != 'legacy'
+        if max_version.nil? || version > max_version
+          raise RpcError.new(-32015, "Transaction version (#{version}) requires maxSupportedTransactionVersion: #{version}")
+        end
 
         meta ||= empty_meta
       end
@@ -408,14 +410,19 @@ module OnlyBlocks
       details = config['transactionDetails'].nil? ? 'full' : config['transactionDetails']
       include_rewards = config['rewards'].nil? ? true : config['rewards']
       max_version = config['maxSupportedTransactionVersion']
+      max_version = uint_parameter(max_version, 255) unless max_version.nil?
       commitment = config['commitment']
       unless %w[json jsonParsed base64 base58].include?(encoding) &&
              %w[full accounts signatures none].include?(details) &&
-             (details != 'accounts' || encoding == 'json') &&
              [true, false].include?(include_rewards) && [nil, 'finalized', 'confirmed'].include?(commitment)
         raise invalid
       end
-      [slot, encoding, details, include_rewards, max_version.nil? ? nil : uint_parameter(max_version, 255)]
+      if encoding == 'base58' && max_version && max_version >= 1
+        raise RpcError.new(-32602, 'base58 encoding is not supported with maxSupportedTransactionVersion >= 1')
+      end
+      raise invalid if details == 'accounts' && encoding != 'json'
+
+      [slot, encoding, details, include_rewards, max_version]
     end
 
     def dispatch(request)

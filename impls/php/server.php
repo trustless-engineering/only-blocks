@@ -15,7 +15,7 @@ final class Options
         public readonly string $encoding,
         public readonly string $details,
         public readonly bool $rewards,
-        public readonly bool $hasVersion,
+        public readonly ?int $maxVersion,
     ) {}
 }
 
@@ -137,8 +137,10 @@ final class Archive
                 }
                 $frame = $node[2] ?? null;
                 $meta = is_array($frame) ? Metadata::meta($slot, $car->frame($frame)) : null;
-                if ($tx->v0) {
-                    if (!$options->hasVersion) throw new RpcError('Transaction version 0 requires maxSupportedTransactionVersion', -32015);
+                if ($tx->version !== 'legacy') {
+                    if ($options->maxVersion === null || $tx->version > $options->maxVersion) {
+                        throw new RpcError("Transaction version ({$tx->version}) requires maxSupportedTransactionVersion: {$tx->version}", -32015);
+                    }
                     $meta ??= new Meta();
                 }
                 $transactions[] = $tx->json($meta, $options);
@@ -246,11 +248,15 @@ REGEX;
         $version = is_object($config) ? ($config->{'~smaxSupportedTransactionVersion'} ?? null) : null;
         if (!in_array($encoding, ['json', 'jsonParsed', 'base64', 'base58'], true) ||
             !in_array($details, ['full', 'accounts', 'signatures', 'none'], true) ||
-            ($details === 'accounts' && $encoding !== 'json') || !is_bool($rewards) ||
+            !is_bool($rewards) ||
             !in_array($option('commitment', 'finalized'), ['finalized', 'confirmed'], true))
             throw self::invalidParams();
-        if ($version !== null) self::uint($version, 255);
-        return [$slot, new Options($encoding, $details, $rewards, $version !== null)];
+        $maxVersion = $version === null ? null : self::uint($version, 255);
+        if ($encoding === 'base58' && $maxVersion !== null && $maxVersion >= 1) {
+            throw new RpcError('base58 encoding is not supported with maxSupportedTransactionVersion >= 1', -32602);
+        }
+        if ($details === 'accounts' && $encoding !== 'json') throw self::invalidParams();
+        return [$slot, new Options($encoding, $details, $rewards, $maxVersion)];
     }
 
     private function dispatch(mixed $request): array

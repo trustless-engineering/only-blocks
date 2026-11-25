@@ -51,10 +51,14 @@ function blockParams(params: unknown): BlockOptions & { slot: bigint } {
   const maxVersion = jsonUnsigned(config.maxSupportedTransactionVersion, 255n);
   if (
     !oneOf(ENCODINGS, encoding) || !oneOf(DETAILS, details) ||
-    (details === 'accounts' && encoding !== 'json') || typeof rewards !== 'boolean' ||
+    typeof rewards !== 'boolean' ||
     (config.maxSupportedTransactionVersion != null && maxVersion === null) ||
     (config.commitment != null && !oneOf(['finalized', 'confirmed'], config.commitment))
   ) throw invalid();
+  if (encoding === 'base58' && maxVersion !== null && maxVersion >= 1n) {
+    throw new RpcError(-32602, 'base58 encoding is not supported with maxSupportedTransactionVersion >= 1');
+  }
+  if (details === 'accounts' && encoding !== 'json') throw invalid();
   return { slot, encoding, details, rewards, maxVersion };
 }
 
