@@ -335,7 +335,15 @@ block_params:
     b.ne 81f
     LDG x9, _gb_enc
     cbnz x9, 90f
-81: mov x0, #1
+81: // base58 cannot carry v1 transactions: reject it with any
+    // maxSupportedTransactionVersion >= 1 (signed, so -1 = none passes)
+    LDG x9, _gb_enc
+    cmp x9, #3
+    b.ne 82f
+    LDG x9, _gb_maxv
+    cmp x9, #1
+    b.ge 90f
+82: mov x0, #1
     LEAVE
 90: mov x0, #0
     LEAVE
