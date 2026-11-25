@@ -68,6 +68,7 @@ defmodule OnlyBlocks.Zstd do
         _ -> fail("truncated frame content size")
       end
 
+    if content != nil and total + content > @max_out, do: fail("decompressed size limit exceeded")
     {out, r4} = blocks(r3, <<>>, %{rep: {1, 4, 8}, huf: nil, ll: nil, off: nil, ml: nil}, total)
     if content != nil and content != byte_size(out), do: fail("frame content size mismatch")
 
@@ -94,9 +95,11 @@ defmodule OnlyBlocks.Zstd do
     {out, st, next} =
       case {header >>> 1 &&& 3, rest} do
         {0, <<raw::binary-size(size), r::binary>>} ->
+          if total + byte_size(out) + size > @max_out, do: fail("decompressed size limit exceeded")
           {out <> raw, st, r}
 
         {1, <<byte, r::binary>>} ->
+          if total + byte_size(out) + size > @max_out, do: fail("decompressed size limit exceeded")
           {out <> :binary.copy(<<byte>>, size), st, r}
 
         {2, <<block::binary-size(size), r::binary>>} ->

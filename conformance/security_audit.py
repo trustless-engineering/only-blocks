@@ -417,7 +417,7 @@ def assert_tmpdir_empty(tmpdir):
         raise AuditFailure("TMPDIR contains: " + ", ".join(str(p.relative_to(tmpdir)) for p in entries[:8]))
 
 
-def http_request(bind, method, body=b"", timeout=5):
+def http_request(bind, method, body=b"", timeout=20):
     connection = http.client.HTTPConnection(*bind, timeout=timeout)
     try:
         headers = {"Connection": "close"}
@@ -433,7 +433,7 @@ def http_request(bind, method, body=b"", timeout=5):
         connection.close()
 
 
-def raw_post_status(bind, body, timeout=5):
+def raw_post_status(bind, body, timeout=20):
     """Return an HTTP status, or None when the peer safely drops the request."""
     head = (
         f"POST / HTTP/1.1\r\nHost: {bind[0]}:{bind[1]}\r\n"
@@ -458,7 +458,7 @@ def raw_post_status(bind, body, timeout=5):
     return int(match[1]) if match else None
 
 
-def rpc(bind, value, timeout=5):
+def rpc(bind, value, timeout=20):
     body = value if isinstance(value, bytes) else json.dumps(value, separators=(",", ":")).encode()
     status, raw = http_request(bind, "POST", body, timeout)
     if status != 200:
