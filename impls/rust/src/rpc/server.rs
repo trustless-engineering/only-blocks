@@ -16,14 +16,10 @@ use solana_hash::Hash;
 use tracing::{debug, warn};
 
 use crate::decoder::{
-    decode_block_from_index, decode_transaction_by_signature, encode_block, encode_transaction,
-    extract_blockhash_from_car, CarIndex, DecodeOptions,
+    decode_block_from_index, encode_block, extract_blockhash_from_car, CarIndex, DecodeOptions,
 };
-use crate::error::OldFaithfulError;
 use crate::old_faithful::OldFaithfulClient;
-use crate::rpc::types::{
-    GetBlockParams, GetTransactionParams, JsonRpcError, JsonRpcRequest, JsonRpcResponse,
-};
+use crate::rpc::types::{GetBlockParams, JsonRpcError, JsonRpcRequest, JsonRpcResponse};
 
 /// Default capacity for the bounded RAM-only `slot -> blockhash` LRU cache.
 ///
@@ -184,44 +180,6 @@ impl RpcState {
             .map_err(|e| JsonRpcError::internal_error(format!("JSON serialization failed: {e}")))
     }
 
-    /// Execute a slot-hinted `getTransaction` RPC call end-to-end (historical-only, strictly in RAM).
-    pub async fn handle_get_transaction(
-        &self,
-        params: GetTransactionParams,
-    ) -> Result<Value, JsonRpcError> {
-        let slot = params.slot;
-        let car_slice = match self.client.fetch_slot_car(slot).await {
-            Ok(slice) => slice,
-            // Standard Solana `getTransaction` behavior for a skipped slot: return `result: null`.
-            Err(OldFaithfulError::SkippedSlot { .. }) => return Ok(Value::Null),
-            Err(err) => return Err(JsonRpcError::from_old_faithful_error(&err)),
-        };
-
-        let signature = params.signature;
-        let encoding = params.encoding;
-        let max_ver = params.max_supported_transaction_version;
-
-        let encoded_opt = tokio::task::spawn_blocking(move || {
-            let found = decode_transaction_by_signature(slot, &car_slice.bytes, &signature)
-                .map_err(|e| JsonRpcError::from_decoder_error(&e))?;
-            match found {
-                Some(tx) => encode_transaction(tx, encoding, max_ver)
-                    .map(Some)
-                    .map_err(|e| JsonRpcError::from_encode_error(&e)),
-                None => Ok(None),
-            }
-        })
-        .await
-        .map_err(|e| JsonRpcError::internal_error(format!("decode task panicked: {e}")))??;
-
-        match encoded_opt {
-            Some(encoded) => serde_json::to_value(encoded).map_err(|e| {
-                JsonRpcError::internal_error(format!("JSON serialization failed: {e}"))
-            }),
-            None => Ok(Value::Null),
-        }
-    }
-
     /// Dispatch a single parsed JSON-RPC 2.0 request.
     pub async fn dispatch_request(&self, req: JsonRpcRequest) -> JsonRpcResponse {
         if !matches!(req.id, Value::Null | Value::String(_) | Value::Number(_)) {
@@ -268,16 +226,6 @@ impl RpcState {
                     Ok(result) => JsonRpcResponse::ok(id, result),
                     Err(err) => {
                         warn!(code = err.code, message = %err.message, "getBlock failed");
-                        JsonRpcResponse::err(id, err)
-                    }
-                },
-                Err(err) => JsonRpcResponse::err(id, err),
-            },
-            "getTransaction" => match GetTransactionParams::from_rpc_params(req.params.as_ref()) {
-                Ok(params) => match self.handle_get_transaction(params).await {
-                    Ok(result) => JsonRpcResponse::ok(id, result),
-                    Err(err) => {
-                        warn!(code = err.code, message = %err.message, "getTransaction failed");
                         JsonRpcResponse::err(id, err)
                     }
                 },
@@ -399,7 +347,6 @@ mod tests {
     use axum::http::{Method, Request};
     use http_body_util::BodyExt;
     use serde_json::{json, Value};
-    use solana_signature::Signature;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
     use tower::ServiceExt;
@@ -766,260 +713,35 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn rpc_server_handles_get_transaction_slot_hint_encodings_versions_and_errors() {
-        let slot = 302_400_001u64;
-        let pre_157_slot = 43_200_000u64;
-        let skipped_slot = 302_400_004u64;
-        let unarchived_slot = 9999 * SLOTS_PER_EPOCH;
-
-        let legacy_tx = sample_legacy_tx(12);
-        let v0_tx = sample_v0_tx(34);
-        let pre_157_tx = sample_legacy_tx(56);
-        let legacy_sig = legacy_tx.signatures[0].to_string();
-        let v0_sig = v0_tx.signatures[0].to_string();
-        let pre_157_sig = pre_157_tx.signatures[0].to_string();
-        let absent_sig = Signature::from([99u8; 64]).to_string();
-
-        let mut slots = HashMap::new();
-        // Use multi-frame DataFrames for the modern slot's transactions and metadata.
-        slots.insert(
-            slot,
-            Some(build_synthetic_slot_car_with_options(
-                slot,
-                slot - 1,
-                0x22,
-                &[legacy_tx, v0_tx],
-                true,
-                true,
-            )),
-        );
-        slots.insert(
-            pre_157_slot,
-            Some(build_synthetic_slot_car_with_options(
-                pre_157_slot,
-                pre_157_slot - 1,
-                0x11,
-                &[pre_157_tx],
-                false,
-                true,
-            )),
-        );
-        slots.insert(skipped_slot, None);
-
-        let mock = MockOldFaithful::start(vec![100, 700], slots).await;
+    async fn rejects_removed_method_without_outbound_requests() {
+        let mock = MockOldFaithful::start(vec![], HashMap::new()).await;
         let client = OldFaithfulClient::new(OldFaithfulConfig::with_base_url(&mock.base_url))
             .expect("client");
         let app = build_router(RpcState::new(client));
+        let method = "getTransaction";
+        let signature = sample_legacy_tx(12).signatures[0].to_string();
 
-        // 1. Missing/invalid slot hint, invalid sig/encoding/commitment -> -32602 with ZERO HTTP calls.
-        for bad_params in [
-            json!([legacy_sig]),
-            json!([legacy_sig, {}]),
-            json!([legacy_sig, { "slot": null }]),
-            json!([legacy_sig, { "slot": -5 }]),
-            json!([legacy_sig, { "slot": 1.5 }]),
-            json!([legacy_sig, { "slot": "302400001" }]),
-            json!(["not-a-valid-sig-0OIl", { "slot": slot }]),
-            json!([legacy_sig, { "slot": slot, "encoding": "base64+zstd" }]),
-            json!([legacy_sig, { "slot": slot, "commitment": "processed" }]),
-            json!([legacy_sig, { "slot": slot, "commitment": "unknown" }]),
-        ] {
-            let resp = rpc_post(
-                &app,
-                &json!({
-                    "jsonrpc": "2.0",
-                    "id": 1,
-                    "method": "getTransaction",
-                    "params": bad_params
-                })
-                .to_string(),
-            )
-            .await;
-            assert_eq!(
-                resp["error"]["code"],
-                error_codes::INVALID_PARAMS,
-                "expected -32602 for {bad_params}, got {resp}"
-            );
-        }
+        let response = rpc_post(
+            &app,
+            &json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": method,
+                "params": [signature, { "slot": 302_400_001 }]
+            })
+            .to_string(),
+        )
+        .await;
+
         assert_eq!(
-            mock.request_count(),
-            0,
-            "invalid getTransaction params must never make outbound HTTP requests"
+            response,
+            json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "error": { "code": -32601, "message": format!("Method not found: {method}") }
+            })
         );
-
-        // 2. v0 tx without maxSupportedTransactionVersion -> -32015
-        let ver_err = rpc_post(
-            &app,
-            &json!({
-                "jsonrpc": "2.0",
-                "id": 2,
-                "method": "getTransaction",
-                "params": [v0_sig, { "slot": slot }]
-            })
-            .to_string(),
-        )
-        .await;
-        assert_eq!(
-            ver_err["error"]["code"],
-            error_codes::UNSUPPORTED_TRANSACTION_VERSION
-        );
-
-        // 3. v0 tx with maxSupportedTransactionVersion: 0 across all 4 encodings
-        for encoding in ["json", "jsonParsed", "base64", "base58"] {
-            let resp = rpc_post(
-                &app,
-                &json!({
-                    "jsonrpc": "2.0",
-                    "id": encoding,
-                    "method": "getTransaction",
-                    "params": [v0_sig, {
-                        "slot": slot,
-                        "encoding": encoding,
-                        "maxSupportedTransactionVersion": 0,
-                        "commitment": "finalized"
-                    }]
-                })
-                .to_string(),
-            )
-            .await;
-            assert!(
-                resp.get("error").is_none(),
-                "unexpected error for {encoding}: {resp}"
-            );
-            let res = &resp["result"];
-            assert_eq!(res["slot"], slot);
-            assert_eq!(res["blockTime"], 1_730_000_000);
-            assert_eq!(res["version"], 0);
-            assert_eq!(res["meta"]["fee"], 5_000);
-            match encoding {
-                "json" => {
-                    assert_eq!(res["transaction"]["signatures"][0], v0_sig);
-                    assert!(res["transaction"]["message"]["accountKeys"][0].is_string());
-                }
-                "jsonParsed" => {
-                    assert_eq!(res["transaction"]["signatures"][0], v0_sig);
-                    assert!(res["transaction"]["message"]["accountKeys"][0]["pubkey"].is_string());
-                }
-                "base64" => {
-                    assert!(res["transaction"][0].is_string());
-                    assert_eq!(res["transaction"][1], "base64");
-                }
-                "base58" => {
-                    assert!(res["transaction"][0].is_string());
-                    assert_eq!(res["transaction"][1], "base58");
-                }
-                _ => unreachable!(),
-            }
-        }
-
-        // 4. Legacy tx without maxSupportedTransactionVersion succeeds and omits `version`;
-        //    with `maxSupportedTransactionVersion: 0` includes `version: "legacy"`.
-        let legacy_no_ver = rpc_post(
-            &app,
-            &json!({
-                "jsonrpc": "2.0",
-                "id": 4,
-                "method": "getTransaction",
-                "params": [legacy_sig, { "slot": slot, "commitment": "confirmed" }]
-            })
-            .to_string(),
-        )
-        .await;
-        assert!(legacy_no_ver.get("error").is_none());
-        assert_eq!(legacy_no_ver["result"]["slot"], slot);
-        assert!(legacy_no_ver["result"].get("version").is_none());
-
-        let legacy_with_ver = rpc_post(
-            &app,
-            &json!({
-                "jsonrpc": "2.0",
-                "id": 5,
-                "method": "getTransaction",
-                "params": [legacy_sig, { "slot": slot, "maxSupportedTransactionVersion": 0 }]
-            })
-            .to_string(),
-        )
-        .await;
-        assert!(legacy_with_ver.get("error").is_none());
-        assert_eq!(legacy_with_ver["result"]["version"], "legacy");
-
-        // 5. Pre-Epoch 157 legacy bincode transaction decodes cleanly
-        let pre_157_resp = rpc_post(
-            &app,
-            &json!({
-                "jsonrpc": "2.0",
-                "id": 6,
-                "method": "getTransaction",
-                "params": [pre_157_sig, {
-                    "slot": pre_157_slot,
-                    "encoding": "jsonParsed",
-                    "maxSupportedTransactionVersion": 0
-                }]
-            })
-            .to_string(),
-        )
-        .await;
-        assert!(pre_157_resp.get("error").is_none());
-        assert_eq!(pre_157_resp["result"]["slot"], pre_157_slot);
-        assert_eq!(pre_157_resp["result"]["meta"]["fee"], 5_000);
-        assert_eq!(pre_157_resp["result"]["blockTime"], 1_730_000_000);
-        assert_eq!(pre_157_resp["result"]["version"], "legacy");
-
-        // 6. Skipped slot -> result: null
-        let skipped = rpc_post(
-            &app,
-            &json!({
-                "jsonrpc": "2.0",
-                "id": 7,
-                "method": "getTransaction",
-                "params": [legacy_sig, { "slot": skipped_slot }]
-            })
-            .to_string(),
-        )
-        .await;
-        assert!(
-            skipped.get("error").is_none(),
-            "unexpected error: {skipped}"
-        );
-        assert!(skipped.as_object().unwrap().contains_key("result"));
-        assert!(skipped["result"].is_null());
-
-        // 7. Absent signature in existing slot -> result: null
-        let absent = rpc_post(
-            &app,
-            &json!({
-                "jsonrpc": "2.0",
-                "id": 8,
-                "method": "getTransaction",
-                "params": [absent_sig, { "slot": slot }]
-            })
-            .to_string(),
-        )
-        .await;
-        assert!(absent.get("error").is_none(), "unexpected error: {absent}");
-        assert!(absent.as_object().unwrap().contains_key("result"));
-        assert!(absent["result"].is_null());
-
-        // 8. Unarchived slot -> -32004 (historical-only)
-        let unarchived = rpc_post(
-            &app,
-            &json!({
-                "jsonrpc": "2.0",
-                "id": 9,
-                "method": "getTransaction",
-                "params": [legacy_sig, { "slot": unarchived_slot }]
-            })
-            .to_string(),
-        )
-        .await;
-        assert_eq!(
-            unarchived["error"]["code"],
-            error_codes::BLOCK_NOT_AVAILABLE
-        );
-        assert!(unarchived["error"]["message"]
-            .as_str()
-            .unwrap()
-            .contains("historical-only"));
+        assert_eq!(mock.request_count.load(Ordering::SeqCst), 0);
     }
 
     #[tokio::test]
@@ -1145,13 +867,11 @@ mod tests {
         const BASE_SLOT: u64 = 302_400_000;
         const SLOT_COUNT: u64 = 25;
         let mut slots_data: HashMap<u64, Vec<u8>> = HashMap::new();
-        let mut slot_sigs: HashMap<u64, String> = HashMap::new();
 
         for i in 0..=SLOT_COUNT {
             let slot = BASE_SLOT + i;
             let parent = if i == 0 { slot } else { slot - 1 };
             let tx = sample_legacy_tx((i as u8).wrapping_add(1));
-            let sig = tx.signatures[0].to_string();
             let car = build_synthetic_slot_car_with_options(
                 slot,
                 parent,
@@ -1161,7 +881,6 @@ mod tests {
                 false,
             );
             slots_data.insert(slot, car);
-            slot_sigs.insert(slot, sig);
         }
 
         // Pack Epoch 700 CAR and slot-ranges table.
@@ -1312,7 +1031,7 @@ mod tests {
         let state = RpcState::with_blockhash_cache_capacity(client.clone(), BLOCKHASH_CACHE_CAP);
         let app = build_router(state.clone());
 
-        // Launch 50 concurrent RPC requests: 25 getBlock + 25 getTransaction across 25 distinct slots.
+        // Launch concurrent getBlock requests across 25 distinct slots.
         let mut tasks = Vec::new();
         for i in 1..=SLOT_COUNT {
             let slot = BASE_SLOT + i;
@@ -1334,28 +1053,6 @@ mod tests {
                     "getBlock({slot}) failed under 429 burst: {resp}"
                 );
                 assert_eq!(resp["result"]["parentSlot"], slot - 1);
-            }));
-
-            let sig = slot_sigs[&slot].clone();
-            let app_tx = app.clone();
-            tasks.push(tokio::spawn(async move {
-                let resp = rpc_post(
-                    &app_tx,
-                    &json!({
-                        "jsonrpc": "2.0",
-                        "id": format!("tx-{slot}"),
-                        "method": "getTransaction",
-                        "params": [sig, { "slot": slot, "encoding": "jsonParsed", "maxSupportedTransactionVersion": 0 }]
-                    })
-                    .to_string(),
-                )
-                .await;
-                assert!(
-                    resp.get("error").is_none(),
-                    "getTransaction({slot}) failed under 429 burst: {resp}"
-                );
-                assert_eq!(resp["result"]["slot"], slot);
-                assert_eq!(resp["result"]["transaction"]["signatures"][0], sig);
             }));
         }
 

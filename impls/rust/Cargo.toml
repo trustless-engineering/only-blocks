@@ -1,5 +1,5 @@
 [package]
-name = "instant-rpc"
+name = "onlyblocks"
 version = "0.1.0"
 edition = "2021"
 description = "Historical-only Solana JSON-RPC server backed by Old Faithful HTTP/2 Range requests"
@@ -7,7 +7,6 @@ description = "Historical-only Solana JSON-RPC server backed by Old Faithful HTT
 [dependencies]
 axum = "0.8"
 bincode = "1"
-bs58 = "0.5"
 bytes = "1"
 cid = "0.11"
 clap = { version = "4", features = ["derive", "env"] }
@@ -28,7 +27,6 @@ solana-message = "3.0"
 solana-pubkey = { version = "3.0", default-features = false }
 solana-reward-info = { version = "3.0", features = ["serde"] }
 solana-serde = "3.0"
-solana-signature = { version = "3.1", default-features = false }
 solana-transaction = { version = "3.0", features = ["serde"] }
 solana-transaction-context = { version = "=3.1.14", features = ["agave-unstable-api", "bincode", "serde"] }
 solana-transaction-error = { version = "3.0", features = ["serde"] }
@@ -43,5 +41,6 @@ zstd = { version = "0.14", default-features = false }
 [dev-dependencies]
 http-body-util = "0.1"
 sha2 = "0.10"
+solana-signature = { version = "3.1", default-features = false }
 tokio = { version = "1", features = ["full"] }
 tower = { version = "0.5", features = ["util"] }

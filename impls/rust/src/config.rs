@@ -101,7 +101,7 @@ impl Default for OldFaithfulConfig {
     fn default() -> Self {
         Self {
             base_url: DEFAULT_BASE_URL.to_string(),
-            user_agent: format!("instant-rpc/{}", env!("CARGO_PKG_VERSION")),
+            user_agent: format!("onlyblocks/{}", env!("CARGO_PKG_VERSION")),
             connect_timeout: DEFAULT_CONNECT_TIMEOUT,
             request_timeout: DEFAULT_REQUEST_TIMEOUT,
             pool_idle_timeout: DEFAULT_POOL_IDLE_TIMEOUT,

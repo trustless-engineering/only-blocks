@@ -12,13 +12,8 @@ use std::time::Instant;
 use axum::body::Body;
 use axum::http::{Method, Request, StatusCode};
 use http_body_util::BodyExt;
-use instant_rpc::{
-    build_router, decode_transaction_by_signature, encode_transaction, error_codes,
-    OldFaithfulClient, RpcState, SLOTS_PER_EPOCH,
-};
+use onlyblocks::{build_router, error_codes, OldFaithfulClient, RpcState, SLOTS_PER_EPOCH};
 use serde_json::{json, Value};
-use solana_signature::Signature;
-use solana_transaction_status::UiTransactionEncoding;
 use tower::ServiceExt;
 
 async fn rpc_post(app: &axum::Router, body: Value) -> Value {
@@ -43,7 +38,7 @@ async fn rpc_post(app: &axum::Router, body: Value) -> Value {
 #[ignore = "hits live https://files.old-faithful.net"]
 async fn live_get_block_modern_slot_all_four_encodings_and_latency() {
     let client = OldFaithfulClient::with_defaults().expect("client");
-    let app = build_router(RpcState::new(client.clone()));
+    let app = build_router(RpcState::new(client));
     let slot = 302_400_001u64; // Epoch 700, normal modern slot (contains v0 txs)
 
     // 0. getHealth sanity check on live router
@@ -223,20 +218,6 @@ async fn live_get_block_modern_slot_all_four_encodings_and_latency() {
         error_codes::UNSUPPORTED_TRANSACTION_VERSION,
         "expected -32015 when maxSupportedTransactionVersion omitted, got: {resp_no_ver}"
     );
-
-    // 7. M3 reuse check: decode a single transaction by signature directly from CAR slice
-    let first_sig_str = txs_json[0]["transaction"]["signatures"][0]
-        .as_str()
-        .expect("first signature");
-    let first_sig: Signature = first_sig_str.parse().expect("parse sig");
-    let car = client.fetch_slot_car(slot).await.expect("fetch car");
-    let found = decode_transaction_by_signature(slot, &car.bytes, &first_sig)
-        .expect("decode single tx")
-        .expect("tx present");
-    assert_eq!(found.block_time, Some(block_time));
-    let encoded_tx =
-        encode_transaction(found, UiTransactionEncoding::JsonParsed, Some(0)).expect("encode tx");
-    assert_eq!(encoded_tx.slot, slot);
 
     println!(
         "[live_get_block_modern_slot] slot={slot} parent={parent_slot} txs={} blockhash={blockhash} prev={prev_blockhash} cold={cold_ms:.1}ms warm_json={warm_ms:.1}ms jsonParsed={parsed_ms:.1}ms base64={b64_ms:.1}ms base58={b58_ms:.1}ms",

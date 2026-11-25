@@ -8,6 +8,6 @@ pub use server::{
     DEFAULT_MAX_BATCH_SIZE, DEFAULT_MAX_REQUEST_BODY_BYTES,
 };
 pub use types::{
-    error_codes, parse_block_encoding, parse_signature, parse_transaction_encoding, GetBlockParams,
-    GetTransactionParams, JsonRpcError, JsonRpcRequest, JsonRpcResponse,
+    error_codes, parse_block_encoding, parse_transaction_encoding, GetBlockParams, JsonRpcError,
+    JsonRpcRequest, JsonRpcResponse,
 };

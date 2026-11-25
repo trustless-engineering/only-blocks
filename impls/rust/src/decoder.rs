@@ -1,17 +1,13 @@
 //! Zero-disk, low-allocation CARv1 / IPLD DAG-CBOR decoder for Old Faithful slot slices.
 //!
-//! Designed for both Milestone 2 (`getBlock`) and Milestone 3 (`getTransaction`) reuse:
 //! - [`CarIndex`] parses a contiguous headerless CARv1 slot slice in-place without copying
 //!   section payloads.
 //! - [`decode_block_from_car`] decodes a full (or partial, per [`DecodeOptions`]) Solana
 //!   [`ConfirmedBlock`], handling multi-frame `DataFrame` reassembly and the pre-Epoch 157
 //!   bincode/protobuf split.
-//! - [`decode_transaction_by_signature`] locates and decodes a single transaction + its
-//!   metadata + block `blockTime` directly from a slot CAR slice without decoding unrelated
-//!   transactions or block rewards.
 //! - [`extract_blockhash_from_car`] reads only the `Block` node and its last `Entry` hash so
 //!   `previousBlockhash` resolution avoids decoding transactions or rewards.
-//! - [`encode_block`] and [`encode_transaction`] delegate to `solana-transaction-status` for
+//! - [`encode_block`] delegates to `solana-transaction-status` for
 //!   full Solana JSON-RPC parity across all 4 encodings (`json`, `jsonParsed`, `base64`, `base58`).
 
 use std::collections::{HashMap, HashSet};
@@ -22,11 +18,9 @@ use crc::{Crc, CRC_64_GO_ISO};
 use fnv::FnvHasher;
 use serde_cbor::Value as CborValue;
 use solana_hash::{Hash, HASH_BYTES};
-use solana_signature::Signature;
 use solana_transaction::versioned::VersionedTransaction;
 use solana_transaction_status::{
-    BlockEncodingOptions, ConfirmedBlock, ConfirmedTransactionWithStatusMeta, EncodeError,
-    EncodedConfirmedTransactionWithStatusMeta, TransactionWithStatusMeta, UiConfirmedBlock,
+    BlockEncodingOptions, ConfirmedBlock, EncodeError, TransactionWithStatusMeta, UiConfirmedBlock,
     UiTransactionEncoding, VersionedTransactionWithStatusMeta,
 };
 use thiserror::Error;
@@ -812,7 +806,7 @@ impl DecodeOptions {
     }
 }
 
-/// A decoded Solana block ready for JSON-RPC encoding or single-transaction lookup.
+/// A decoded Solana block ready for JSON-RPC encoding.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DecodedBlock {
     pub slot: u64,
@@ -827,23 +821,6 @@ impl DecodedBlock {
         options: BlockEncodingOptions,
     ) -> Result<UiConfirmedBlock, EncodeError> {
         encode_block(self.block, encoding, options)
-    }
-
-    /// Locate a single transaction in this decoded block by signature (reusable by M3 `getTransaction`).
-    pub fn find_transaction(
-        &self,
-        signature: &Signature,
-    ) -> Option<ConfirmedTransactionWithStatusMeta> {
-        self.block
-            .transactions
-            .iter()
-            .find(|tx| tx.transaction_signature() == signature)
-            .cloned()
-            .map(|tx_with_meta| ConfirmedTransactionWithStatusMeta {
-                slot: self.slot,
-                tx_with_meta,
-                block_time: self.block.block_time,
-            })
     }
 }
 
@@ -919,55 +896,6 @@ pub fn decode_block_from_car(
     decode_block_from_index(slot, &index, previous_blockhash, options)
 }
 
-/// Directly locate and decode a single transaction by [`Signature`] from a slot's raw CAR slice.
-///
-/// Designed for Milestone 3 (`getTransaction`): skips block rewards and skips decompressing
-/// metadata for non-matching transactions, while reading `blockTime` from the `Block` node.
-pub fn decode_transaction_by_signature(
-    slot: u64,
-    car_bytes: &[u8],
-    signature: &Signature,
-) -> Result<Option<ConfirmedTransactionWithStatusMeta>, DecoderError> {
-    let index = CarIndex::parse(car_bytes)?;
-    let block = index.block(Some(slot))?;
-
-    for entry_cid in &block.entries {
-        let entry_cbor = index
-            .get_cbor(entry_cid)
-            .ok_or_else(|| DecoderError::MissingCid {
-                cid: entry_cid.to_string(),
-            })?;
-        let entry = parse_entry_cbor(entry_cbor)?;
-
-        for tx_cid in &entry.transactions {
-            let tx_cbor = index
-                .get_cbor(tx_cid)
-                .ok_or_else(|| DecoderError::MissingCid {
-                    cid: tx_cid.to_string(),
-                })?;
-            let tx_node = parse_transaction_cbor(tx_cbor)?;
-            let tx_bytes = index.reassemble_dataframe(&tx_node.data)?;
-            let versioned_tx: VersionedTransaction = bincode::deserialize(&tx_bytes)
-                .map_err(|e| DecoderError::TransactionDeserialize(e.to_string()))?;
-
-            if versioned_tx.signatures.first() != Some(signature) {
-                continue;
-            }
-
-            let tx_with_meta =
-                index.decode_transaction_metadata(slot, versioned_tx, &tx_node.metadata)?;
-
-            return Ok(Some(ConfirmedTransactionWithStatusMeta {
-                slot,
-                tx_with_meta,
-                block_time: block.meta.blocktime,
-            }));
-        }
-    }
-
-    Ok(None)
-}
-
 /// Encode a [`ConfirmedBlock`] into a Solana JSON-RPC [`UiConfirmedBlock`].
 pub fn encode_block(
     block: ConfirmedBlock,
@@ -975,16 +903,6 @@ pub fn encode_block(
     options: BlockEncodingOptions,
 ) -> Result<UiConfirmedBlock, EncodeError> {
     block.encode_with_options(encoding, options)
-}
-
-/// Encode a [`ConfirmedTransactionWithStatusMeta`] into a Solana JSON-RPC
-/// [`EncodedConfirmedTransactionWithStatusMeta`] (reusable by M3 `getTransaction`).
-pub fn encode_transaction(
-    tx: ConfirmedTransactionWithStatusMeta,
-    encoding: UiTransactionEncoding,
-    max_supported_transaction_version: Option<u8>,
-) -> Result<EncodedConfirmedTransactionWithStatusMeta, EncodeError> {
-    tx.encode(encoding, max_supported_transaction_version)
 }
 
 #[cfg(test)]
@@ -995,6 +913,7 @@ pub(crate) mod test_helpers {
     use solana_message::compiled_instruction::CompiledInstruction;
     use solana_message::{v0, Message as LegacyMessage, MessageHeader, VersionedMessage};
     use solana_pubkey::Pubkey;
+    use solana_signature::Signature;
 
     use crate::proto::{
         ProtoNumPartitions, ProtoReward, ProtoRewards, ProtoTransactionStatusMeta,
@@ -1403,10 +1322,9 @@ mod tests {
     }
 
     #[test]
-    fn decodes_pre_epoch_157_bincode_block_and_single_tx_lookup() {
+    fn decodes_pre_epoch_157_bincode_block() {
         let slot = 43_200_000;
         let tx = sample_legacy_tx(77);
-        let sig = tx.signatures[0];
         let car = build_synthetic_slot_car(slot, slot - 1, 0x12, &[tx], false);
 
         let decoded = decode_block_from_car(
@@ -1418,21 +1336,6 @@ mod tests {
         .expect("decode pre-157");
         assert_eq!(decoded.block.transactions.len(), 1);
         assert_eq!(decoded.block.rewards.len(), 1);
-
-        // Single-transaction lookup directly from CAR (for M3 reuse).
-        let found = decode_transaction_by_signature(slot, &car, &sig)
-            .expect("lookup")
-            .expect("found tx");
-        assert_eq!(found.slot, slot);
-        assert_eq!(found.block_time, Some(1_730_000_000));
-        let encoded = encode_transaction(found, UiTransactionEncoding::JsonParsed, Some(0))
-            .expect("encode tx");
-        assert_eq!(encoded.slot, slot);
-
-        // Missing signature returns Ok(None).
-        let missing = decode_transaction_by_signature(slot, &car, &Signature::from([99u8; 64]))
-            .expect("lookup missing");
-        assert!(missing.is_none());
     }
 
     #[test]
@@ -1452,25 +1355,21 @@ mod tests {
                 true, // split both transaction data and metadata into 3 CRC64-verified DataFrames
             );
 
-            let found = decode_transaction_by_signature(slot, &car, &target_sig)
-                .expect("decode multiframe tx")
-                .expect("tx found");
-            assert_eq!(found.slot, slot);
-            assert_eq!(found.block_time, Some(1_730_000_000));
-            assert_eq!(found.tx_with_meta.transaction_signature(), &target_sig);
-
-            for encoding in [
-                UiTransactionEncoding::Json,
-                UiTransactionEncoding::JsonParsed,
-                UiTransactionEncoding::Base64,
-                UiTransactionEncoding::Base58,
-            ] {
-                let encoded = encode_transaction(found.clone(), encoding, Some(0))
-                    .expect("encode multiframe tx");
-                assert_eq!(encoded.slot, slot);
-                assert_eq!(encoded.block_time, Some(1_730_000_000));
-                assert!(encoded.transaction.meta.is_some());
-            }
+            let decoded = decode_block_from_car(
+                slot,
+                &car,
+                Hash::default().to_string(),
+                DecodeOptions::full(),
+            )
+            .expect("decode block with multi-frame transaction");
+            assert_eq!(decoded.block.transactions.len(), 2);
+            assert_eq!(decoded.block.block_time, Some(1_730_000_000));
+            let TransactionWithStatusMeta::Complete(tx) = &decoded.block.transactions[1] else {
+                panic!("expected complete metadata for the multi-frame transaction");
+            };
+            assert_eq!(tx.transaction.signatures[0], target_sig);
+            assert_eq!(tx.meta.fee, 5_000);
+            assert_eq!(tx.meta.compute_units_consumed, Some(150));
         }
     }
 

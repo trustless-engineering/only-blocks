@@ -1179,49 +1179,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "instant-rpc"
-version = "0.1.0"
-dependencies = [
- "axum",
- "bincode",
- "bs58",
- "bytes",
- "cid",
- "clap",
- "crc",
- "fastrand",
- "fnv",
- "http-body-util",
- "httpdate",
- "lru",
- "multihash",
- "prost",
- "reqwest",
- "serde",
- "serde_cbor",
- "serde_json",
- "sha2",
- "solana-account-decoder-client-types",
- "solana-hash 3.1.0",
- "solana-message",
- "solana-pubkey 3.0.0",
- "solana-reward-info",
- "solana-serde",
- "solana-signature",
- "solana-transaction",
- "solana-transaction-context",
- "solana-transaction-error",
- "solana-transaction-status",
- "thiserror 2.0.21",
- "tokio",
- "tower",
- "tracing",
- "tracing-subscriber",
- "url",
- "zstd 0.14.5",
-]
-
-[[package]]
 name = "ipnet"
 version = "2.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1480,6 +1437,48 @@ name = "once_cell_polyfill"
 version = "1.70.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
+
+[[package]]
+name = "onlyblocks"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "bincode",
+ "bytes",
+ "cid",
+ "clap",
+ "crc",
+ "fastrand",
+ "fnv",
+ "http-body-util",
+ "httpdate",
+ "lru",
+ "multihash",
+ "prost",
+ "reqwest",
+ "serde",
+ "serde_cbor",
+ "serde_json",
+ "sha2",
+ "solana-account-decoder-client-types",
+ "solana-hash 3.1.0",
+ "solana-message",
+ "solana-pubkey 3.0.0",
+ "solana-reward-info",
+ "solana-serde",
+ "solana-signature",
+ "solana-transaction",
+ "solana-transaction-context",
+ "solana-transaction-error",
+ "solana-transaction-status",
+ "thiserror 2.0.21",
+ "tokio",
+ "tower",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+ "zstd 0.14.5",
+]
 
 [[package]]
 name = "opaque-debug"

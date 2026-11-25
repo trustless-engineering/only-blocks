@@ -8,7 +8,7 @@
 
 use std::time::Instant;
 
-use instant_rpc::{OldFaithfulClient, OldFaithfulError, SLOTS_PER_EPOCH};
+use onlyblocks::{OldFaithfulClient, OldFaithfulError, SLOTS_PER_EPOCH};
 
 #[tokio::test]
 #[ignore = "hits live https://files.old-faithful.net"]

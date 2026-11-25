@@ -1,4 +1,12 @@
-/target
+**/target/
+**/__pycache__/
+**/*.pyc
 *.swp
 *.swo
 .DS_Store
+impls/*/bin/
+impls/*/build/
+*.o
+*.hi
+*.beam
+.zig-cache/
