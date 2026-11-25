@@ -264,6 +264,9 @@ let attempt_http base path range ~size ~cap =
 
 (* HTTPS: the OS curl binary performs only the TLS transport; its raw HTTP/1.1
    response (headers + undecoded body) streams over a pipe into the same parser. *)
+(* SPEC 3.3 permits only the OS-provided curl; prefer it over any PATH copy. *)
+let os_curl = if Sys.file_exists "/usr/bin/curl" then "/usr/bin/curl" else "curl"
+
 let attempt_curl base path range ~size ~cap =
   let deadline = now () +. 62. in
   let host = if String.contains base.host ':' then "[" ^ base.host ^ "]" else base.host in
@@ -271,12 +274,12 @@ let attempt_curl base path range ~size ~cap =
     else Printf.sprintf "https://%s:%d%s" host base.port path in
   let r, w = Unix.pipe ~cloexec:true () in
   let devnull = Unix.openfile "/dev/null" [ Unix.O_RDONLY; Unix.O_CLOEXEC ] 0 in
-  let args = [| "curl"; "-sS"; "--http1.1"; "--raw"; "-i"; "--suppress-connect-headers";
+  let args = [| os_curl; "-sS"; "--http1.1"; "--raw"; "-i"; "--suppress-connect-headers";
                 "--connect-timeout"; "10"; "--max-time"; "60";
                 "-H"; "Range: " ^ range; "-H"; "User-Agent: " ^ user_agent;
                 "-H"; "Accept-Encoding: identity"; "-H"; "Connection: close"; "--"; url |] in
   let pid =
-    try Unix.create_process "curl" args devnull w Unix.stderr
+    try Unix.create_process os_curl args devnull w Unix.stderr
     with e -> Unix.close r; Unix.close w; Unix.close devnull; raise (Transport (Printexc.to_string e)) in
   Unix.close w; Unix.close devnull;
   Fun.protect

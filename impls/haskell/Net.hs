@@ -30,6 +30,7 @@ import Foreign.Storable
 import GHC.Conc (closeFdWith)
 import System.Info (os)
 import System.IO (hClose)
+import System.Posix.Files (fileExist)
 import System.Posix.IO (FdOption (..), closeFd, setFdOption)
 import System.Posix.Types (CSsize (..), Fd (..))
 import System.Process
@@ -399,12 +400,14 @@ attempt base path range size cap = do
     -- HTTPS: the OS curl binary does only the TLS transport.  --raw -i makes
     -- its stdout the raw HTTP/1.1 response, parsed exactly like a socket's.
     viaCurl = do
+      -- SPEC 3.3 permits only the OS-provided curl; prefer it over any PATH copy.
+      osCurl <- fileExist "/usr/bin/curl"
       let url = "https://" ++ hostHeader ++ path
           args = [ "-sS", "--http1.1", "--raw", "-i", "--suppress-connect-headers"
                  , "--connect-timeout", "10", "--max-time", "60"
                  , "-H", "Range: " ++ range, "-H", "User-Agent: " ++ BC.unpack userAgent
                  , "-H", "Accept-Encoding: identity", "-H", "Connection: close", "--", url ]
-          spec = (proc "curl" args) { std_in = NoStream, std_out = CreatePipe, std_err = Inherit }
+          spec = (proc (if osCurl then "/usr/bin/curl" else "curl") args) { std_in = NoStream, std_out = CreatePipe, std_err = Inherit }
           start = createProcess spec `catch` \(e :: IOException) -> throwIO (Transport (show e))
           stop (_, out, _, ph) = do
             mapM_ hClose out `catch` \(_ :: IOException) -> pure ()
