@@ -61,7 +61,9 @@ need:
     b.hi tx_bad
     ret
 
-// tx_parse(x0 = bytes, x1 = len) -> x0 = TX.
+// tx_parse(x0 = bytes, x1 = len) -> x0 = TX. The first byte b0 picks the
+// layout (§8.2): b0 < 0x80 is the signature count of a legacy or v0
+// transaction, 0x81 is a v1 (SIMD-0385) transaction, anything else throws.
 FN _tx_parse
     ENTER
     mov x19, x0
@@ -70,6 +72,13 @@ FN _tx_parse
     mov x0, #TX_SIZE
     bl _arena_alloc
     mov x22, x0
+    mov x0, #1
+    bl need
+    ldrb w9, [x19]
+    cmp w9, #0x81
+    b.eq 60f
+    cmp w9, #0x80
+    b.hs tx_bad
     bl cu16
     str x0, [x22, #TX_NSIG]
     lsl x0, x0, #6
@@ -82,8 +91,8 @@ FN _tx_parse
     cmp w9, #128
     b.hi tx_bad
     b.ne 1f
-    mov w10, #1
-    strb w10, [x22, #TX_V0]
+    mov w10, #TXK_V0
+    strb w10, [x22, #TX_KIND]
     mov x0, #1
     bl need
     ldrb w9, [x19], #1
@@ -135,7 +144,7 @@ FN _tx_parse
     add x24, x24, #IX_SIZE
     sub x23, x23, #1
     b 2b
-3:  ldrb w9, [x22, #TX_V0]
+3:  ldrb w9, [x22, #TX_KIND]
     cbz w9, 5f
     bl cu16
     mov x23, x0
@@ -171,6 +180,97 @@ FN _tx_parse
     str x9, [x22, #TX_RAWLEN]
     mov x0, x22
     LEAVE
+
+60: // v1: version byte, header, config_mask, lifetime, counts, static keys,
+    // config values, instruction headers, instruction payloads, then
+    // num_required_signatures x 64-byte signatures at the tail.
+    add x19, x19, #1
+    mov w9, #TXK_V1
+    strb w9, [x22, #TX_KIND]
+    mov x0, #7
+    bl need
+    ldrb w9, [x19], #1
+    strb w9, [x22, #TX_NRS]
+    ldrb w9, [x19], #1
+    strb w9, [x22, #TX_NROS]
+    ldrb w9, [x19], #1
+    strb w9, [x22, #TX_NROU]
+    ldr w25, [x19], #4           // config_mask (u32 LE)
+    cmp w25, #0x1f
+    b.hi tx_bad                  // unknown bit
+    and w9, w25, #3
+    sub w9, w9, #1
+    cmp w9, #1
+    b.ls tx_bad                  // priorityFee needs both bits 0 and 1
+    str x25, [x22, #TX_MASK]
+    mov x0, #34
+    bl need
+    str x19, [x22, #TX_BH]
+    add x19, x19, #32
+    ldrb w23, [x19], #1          // num_instructions
+    ldrb w24, [x19], #1          // num_addresses
+    str x23, [x22, #TX_NIX]
+    str x24, [x22, #TX_NKEYS]
+    lsl x0, x24, #5
+    bl need
+    str x19, [x22, #TX_KEYS]
+    add x19, x19, x0
+    and w9, w25, #3
+    cbz w9, 61f
+    mov x0, #8
+    bl need
+    ldr x9, [x19], #8
+    str x9, [x22, #TX_PFEE]
+61: tbz w25, #2, 62f
+    mov x0, #4
+    bl need
+    ldr w9, [x19], #4
+    str x9, [x22, #TX_CUL]
+62: tbz w25, #3, 63f
+    mov x0, #4
+    bl need
+    ldr w9, [x19], #4
+    str x9, [x22, #TX_LADL]
+63: tbz w25, #4, 64f
+    mov x0, #4
+    bl need
+    ldr w9, [x19], #4
+    str x9, [x22, #TX_HEAP]
+64: lsl x0, x23, #2
+    bl need
+    mov x26, x19                 // instruction headers
+    add x19, x19, x0
+    mov x9, #IX_SIZE
+    mul x0, x23, x9
+    bl _arena_alloc
+    str x0, [x22, #TX_IXS]
+    mov x24, x0
+65: cbz x23, 66f
+    ldrb w9, [x26]
+    str x9, [x24, #IX_PID]
+    ldrb w0, [x26, #1]           // num_accounts
+    bl need
+    str x19, [x24, #IX_ACC]
+    str x0, [x24, #IX_NACC]
+    add x19, x19, x0
+    ldrh w0, [x26, #2]           // data_len (u16 LE)
+    bl need
+    str x19, [x24, #IX_DATA]
+    str x0, [x24, #IX_NDATA]
+    add x19, x19, x0
+    mov x9, #1
+    str x9, [x24, #IX_STACK]
+    add x24, x24, #IX_SIZE
+    add x26, x26, #4
+    sub x23, x23, #1
+    b 65b
+66: ldrb w9, [x22, #TX_NRS]
+    str x9, [x22, #TX_NSIG]
+    lsl x0, x9, #6
+    bl need
+    str x19, [x22, #TX_SIGS]
+    add x19, x19, x0
+    b 5b
 
 // ================================================================ the loop
 
@@ -253,16 +353,17 @@ FN _block_txs
     bl _df_payload
     bl _meta_decode
     mov x28, x0
-12: ldrb w9, [x26, #TX_V0]
+12: ldrb w9, [x26, #TX_KIND]     // versioned (v0 or v1) -> default meta
     cbz w9, 13f
     cbnz x28, 13f
     bl _meta_default
     mov x28, x0
-13: ldrb w9, [x26, #TX_V0]
+13: ldrb w9, [x26, #TX_KIND]
     cbz w9, 14f
-    LDG x9, _gb_maxv
-    cmn x9, #1
-    b.eq 92f
+    sub x9, x9, #1               // numeric version
+    LDG x10, _gb_maxv            // -1 = none, so the signed compare gates it
+    cmp x9, x10
+    b.gt 92f
 14: mov x0, x26
     mov x1, x28
     bl tx_json
@@ -274,7 +375,10 @@ FN _block_txs
     bl _out_byte
     LEAVE 48
 91: FAIL "Transaction has no signature"
-92: LA x1, Lmsg_version
+92: LA x1, Lmsg_version0         // x9 = the rejected version (0 or 1)
+    LA x10, Lmsg_version1
+    cmp x9, #0
+    csel x1, x10, x1, ne
     mov x0, #ERR_VERSION
     bl _ob_throw
 
@@ -367,8 +471,13 @@ tx_json:
     b 9b
 10: mov x0, #']'
     bl _out_byte
-    ldrb w9, [x19, #TX_V0]
-    cbz w9, 13f
+    ldrb w9, [x19, #TX_KIND]
+    cmp w9, #TXK_V1
+    b.ne 101f
+    bl tx_config_json            // v1: transactionConfig, no lookups
+    b 13f
+101: cmp w9, #TXK_V0
+    b.ne 13f
     PUTS ",\"addressTableLookups\":["
     mov x23, #0
 11: ldr x9, [x19, #TX_NLU]
@@ -404,26 +513,65 @@ tx_json:
     LDG x9, _gb_maxv
     cmn x9, #1
     b.eq 53f
-    ldrb w9, [x19, #TX_V0]
+    ldrb w9, [x19, #TX_KIND]
     cbz w9, 52f
-    PUTS ",\"version\":0"
+    sub x1, x9, #1
+    FMT ",\"version\":%u"
     b 53f
 52: PUTS ",\"version\":\"legacy\""
 53: mov x0, #'}'
     bl _out_byte
     LEAVE 32
 
+// tx_config_json: v1 ,"transactionConfig":{...} with all four keys, each
+// null unless its config_mask bit(s) are set (x19 = TX).
+    .p2align 2
+tx_config_json:
+    ENTER
+    ldr x20, [x19, #TX_MASK]
+    PUTS ",\"transactionConfig\":{\"priorityFee\":"
+    and x9, x20, #3
+    cmp x9, #3
+    b.ne 1f
+    ldr x0, [x19, #TX_PFEE]
+    bl _out_u64
+    b 2f
+1:  PUTS "null"
+2:  PUTS ",\"computeUnitLimit\":"
+    tbz x20, #2, 3f
+    ldr x0, [x19, #TX_CUL]
+    bl _out_u64
+    b 4f
+3:  PUTS "null"
+4:  PUTS ",\"loadedAccountsDataSizeLimit\":"
+    tbz x20, #3, 5f
+    ldr x0, [x19, #TX_LADL]
+    bl _out_u64
+    b 6f
+5:  PUTS "null"
+6:  PUTS ",\"heapSize\":"
+    tbz x20, #4, 7f
+    ldr x0, [x19, #TX_HEAP]
+    bl _out_u64
+    b 8f
+7:  PUTS "null"
+8:  mov x0, #'}'
+    bl _out_byte
+    LEAVE
+
 // build_keys: g_keys = static keys, plus (v0 with metadata) loaded
-// writable then readonly; g_nkeys, g_nstatic, g_nwritable. Uses x19 = TX,
-// x20 = model.
+// writable then readonly; g_nkeys, g_nstatic, g_nwritable. Legacy and v1
+// have no lookup tables, so their loaded addresses are ignored. Uses
+// x19 = TX, x20 = model.
     .p2align 2
 build_keys:
     ENTER
     ldr x21, [x19, #TX_NKEYS]
     mov x22, #0
     mov x23, #0
-    ldrb w9, [x19, #TX_V0]
-    cbz w9, 1f
+    ldrb w9, [x19, #TX_KIND]
+    cmp w9, #TXK_V0
+    b.ne 1f
     cbz x20, 1f
     ldr x22, [x20, #MT_LW + VEC_N]
     ldr x23, [x20, #MT_LR + VEC_N]
@@ -1063,7 +1211,8 @@ FN _parse_u64_text
     ret
 
     .section __TEXT,__cstring
-Lmsg_version: .asciz "Transaction version (0) is not supported by the requesting client. Please try the request again with the following configuration parameter: \"maxSupportedTransactionVersion\": 0"
+Lmsg_version0: .asciz "Transaction version (0) is not supported by the requesting client. Please try the request again with the following configuration parameter: \"maxSupportedTransactionVersion\": 0"
+Lmsg_version1: .asciz "Transaction version (1) is not supported by the requesting client. Please try the request again with the following configuration parameter: \"maxSupportedTransactionVersion\": 1"
 Lsrc_tx:      .asciz "transaction"
 Lsrc_lt:      .asciz "lookupTable"
 Lrt_fee:      .asciz "Fee"

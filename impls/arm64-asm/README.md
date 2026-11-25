@@ -1,7 +1,7 @@
 # OnlyBlocks in ARM64 assembly
 
 Hand-written AArch64 assembly for macOS on Apple Silicon. The 11 `.s` files
-contain 8,963 total lines, including 8,276 non-blank, non-comment lines.
+contain 9,131 total lines, including 8,431 non-blank, non-comment lines.
 The implementation is entirely assembly. `build.sh` assembles it with
 `clang -arch arm64` and links the result against libSystem.
 
@@ -32,7 +32,7 @@ Every codec is assembly:
 | `fetch.s` | the Range client, the SPEC §4.3 retry/backoff policy, `Retry-After`, the two 100,000-entry LRU caches |
 | `car.s` | LEB128, CIDs, a validating DAG-CBOR cursor, a hashed CARv1 index, DataFrame DFS reassembly, CRC-64/GO-ISO, FNV-1a |
 | `block.s` | the getBlock pipeline, blockhash and `previousBlockhash` |
-| `tx.s` | `VersionedTransaction`, every encoding and detail level, signer/writable flags with the reserved-key list |
+| `tx.s` | legacy, `v0` and `v1` (SIMD-0385: config mask, split instruction headers/payloads, tail signatures) transactions, every encoding and detail level, the version gate, signer/writable flags with the reserved-key list |
 | `meta.s` | protobuf metadata and rewards, the five bincode layouts, `TransactionError`, the §9 zstd and codec fallbacks |
 | `zstd.s` | RFC 8878: FSE, Huffman (1 and 4 streams), all sequence modes, repeat offsets, skippable frames, XXH64 |
 | `util.s` | the arena, growable buffers, Base58 (base-58^9 limbs), Base64, JSON escaping, UTF-8 validation |

@@ -162,10 +162,11 @@ Lmo\@: .asciz "\str"
 .equ JT_ARRAY, 6
 .equ JT_OBJECT, 7
 
-// Parsed transaction (tx.s).
+// Parsed transaction (tx.s). For v1 the signatures sit at the tail of the
+// wire bytes and TX_NSIG = num_required_signatures.
 .equ TX_NSIG, 0
 .equ TX_SIGS, 8
-.equ TX_V0, 16           // u8
+.equ TX_KIND, 16         // u8: TXK_LEGACY, TXK_V0 or TXK_V1
 .equ TX_NRS, 17          // u8
 .equ TX_NROS, 18         // u8
 .equ TX_NROU, 19         // u8
@@ -178,7 +179,17 @@ Lmo\@: .asciz "\str"
 .equ TX_LUS, 72          // array of LU_SIZE
 .equ TX_RAW, 80
 .equ TX_RAWLEN, 88
-.equ TX_SIZE, 96
+.equ TX_MASK, 96         // v1 config_mask (u32, validated against 0x1F)
+.equ TX_PFEE, 104        // v1 priorityFee (u64) when (mask & 3) == 3
+.equ TX_CUL, 112         // v1 computeUnitLimit (u32) when mask & 4
+.equ TX_LADL, 120        // v1 loadedAccountsDataSizeLimit (u32) when mask & 8
+.equ TX_HEAP, 128        // v1 heapSize (u32) when mask & 16
+.equ TX_SIZE, 136
+
+// Transaction kinds (TX_KIND); the numeric version is kind - 1.
+.equ TXK_LEGACY, 0
+.equ TXK_V0, 1
+.equ TXK_V1, 2
 
 // Compiled instruction (top-level and inner).
 .equ IX_PID, 0           // u64
