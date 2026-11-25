@@ -64,8 +64,8 @@ dispatch({obj, Pairs}) ->
             catch
                 throw:{rpc, Code, Message} -> error_response(Id, Code, Message);
                 Class:Reason ->
-                    error_response(Id, -32603, iolist_to_binary(
-                                                 io_lib:format("Internal error: ~0p", [{Class, Reason}])))
+                    Msg = lists:sublist(lists:flatten(io_lib:format("Internal error: ~w", [{Class, Reason}])), 256),
+                    error_response(Id, -32603, list_to_binary(Msg))
             end
     end;
 dispatch(_) ->

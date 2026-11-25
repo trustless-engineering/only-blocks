@@ -209,9 +209,10 @@ in [`conformance/results.json`](conformance/results.json).
   written by hand.
 * **Slowest, and proudest of it:** [Bash + AWK](impls/bash-awk/) still
   answers a warm `getBlock` in 19 ms, with Zstandard decoded in AWK.
-* **Live mainnet:** all 24 passed the four live probes. Their `blockhash`,
+* **Live mainnet:** all 24 passed the live probes across epochs 100, 700 and
+  1095 (including SIMD-0385 `v1` transactions). Their `blockhash`,
   `previousBlockhash`, `parentSlot`, `blockTime`, `blockHeight`, transaction
-  count and first fee agree for slots `302400001` and `43200000`
+  count and first fee agree on mainnet history
   (`cross_language_live_parity: passed`).
 
 How to read the columns:

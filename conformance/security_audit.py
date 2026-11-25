@@ -218,7 +218,10 @@ def security_cases():
     # bit, truncated trailing signature array, and truncated instruction payload.
     v1_unknown_mask = b"\x81\x01\x00\x00\x20\x00\x00\x00" + bytes(32) + b"\x00\x01" + bytes(32) + bytes(64)
     v1_partial_pf = b"\x81\x01\x00\x00\x01\x00\x00\x00" + bytes(32) + b"\x00\x01" + bytes(32) + bytes(8) + bytes(64)
-    v1_trunc_sigs = b"\x81\x02\x00\x00\x00\x00\x00\x00" + bytes(32) + b"\x00\x02" + bytes(64) + bytes(64)
+    v1_trunc_sigs = (
+        b"\x81\x02\x00\x00\x00\x00\x00\x00" + bytes(32) + b"\x00\x02" + bytes(64)
+        + b"\xc6~W" * 21 + b"\xa5"
+    )
     v1_trunc_payload = (
         b"\x81\x01\x00\x01\x00\x00\x00\x00" + bytes(32) + b"\x01\x02" + bytes(64)
         + b"\x01\x00\xff\xff" + bytes(64)

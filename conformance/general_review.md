@@ -14,7 +14,10 @@ on macOS arm64 on 2026-11-25.
 
 **Every mandated suite exits 0, and all 24 implementations decode and
 serve well-formed `v1` blocks correctly and identically. On corrupt `v1`
-bytes 23 of 24 are correct; `erlang` has one defect (D1).**
+bytes 23 of 24 were already correct at `e164040`, and `erlang`'s Latin-1
+crash-formatter defect (D1) was subsequently fixed in `ob_rpc.erl` (`~w`
+in place of `~0p`) and pinned in `security_audit.py` (`v1_truncated_signatures`
+with printable high-Latin-1 bytes), bringing corrupt-`v1` handling to 24 of 24.**
 
 D1 is an old error-formatting bug that the new `v1` parser also reaches.
 This review does not treat it as blocking the `v1` sign-off, because it
@@ -42,7 +45,7 @@ report this run regenerated.
 
 | # | Severity | Where | Finding |
 |---|---|---|---|
-| D1 | Defect, builder fix needed | `impls/erlang/src/ob_rpc.erl:66-68` | Some corrupt transactions produce an HTTP 200 body that is not valid UTF-8, so it is not valid JSON. Details below. |
+| D1 | Fixed post-review | `impls/erlang/src/ob_rpc.erl:66-68` | Corrupt transactions leaving printable high-Latin-1 bytes produced invalid UTF-8 via `~0p`; fixed by switching to `~w` and pinned in `security_audit.py`. |
 | O1 | Open, documentation | `impls/erlang/`, `impls/elixir/`, `SPEC.md` §1 | Unchanged from the second pass: `inet_gethost` is not named in §1 and two READMEs describe it wrongly. |
 | O2 | Open, documentation | `SPEC.md` §1 | Unchanged: the `bash-awk` process list does not name `bash fetch.bash`. |
 | O3 | Open, documentation | `conformance/results.json`, `README.md` | The benchmark predates `v1`. Line counts, and the "four live probes" claim, are stale. |
