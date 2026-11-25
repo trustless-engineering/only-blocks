@@ -191,7 +191,8 @@ SHOULD use it. The OS facilities are:
 * macOS `Security.framework` / `Network.framework`;
 * the system `libcurl` or `libssl`/`libcrypto` via the language's FFI;
 * spawning the **OS-provided `curl` binary**, solely to perform the HTTPS Range
-  GET. This is the only permitted child process. Its body must be streamed
+  GET. Apart from the runtime plumbing that §1 lists, this is the only
+  permitted child process. Its body must be streamed
   over a pipe, never written to a file. The same status/length checks as §4.2
   apply.
 
