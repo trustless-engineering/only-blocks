@@ -14,14 +14,20 @@ struct AddressTableLookup {
     Bytes account_key, writable, readonly;
 };
 
+struct TransactionConfig {
+    std::optional<std::uint64_t> priority_fee;
+    std::optional<std::uint32_t> compute_unit_limit, loaded_accounts_data_size_limit, heap_size;
+};
+
 struct Transaction {
-    bool v0 = false;
+    std::optional<std::uint8_t> version;  ///< nullopt for legacy
     std::vector<Bytes> signatures;  ///< 64-byte views
     std::uint8_t num_required = 0, num_readonly_signed = 0, num_readonly_unsigned = 0;
     std::vector<Bytes> keys;  ///< static account keys, 32-byte views
     Bytes recent_blockhash;
     std::vector<CompiledInstruction> instructions;
     std::vector<AddressTableLookup> lookups;
+    std::optional<TransactionConfig> config;
     Bytes raw;  ///< the consumed prefix (trailing bytes are not re-encoded)
 
     static Transaction parse(Bytes wire);

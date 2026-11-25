@@ -73,7 +73,7 @@ struct AccountKeys {
 
     AccountKeys(const Transaction& tx, const Meta* meta) : statics(tx.keys.size()) {
         for (auto k : tx.keys) names.push_back(base58(k));
-        if (tx.v0 && meta) {
+        if (tx.version == 0 && meta) {
             loaded_writable = meta->loaded_writable.size();
             for (auto k : meta->loaded_writable) names.push_back(base58(k));
             for (auto k : meta->loaded_readonly) names.push_back(base58(k));
@@ -113,10 +113,10 @@ public:
 
     void transaction(const TxWithMeta& t) {
         const auto& tx = t.tx;
-        if (t.meta && tx.v0 && !o_.max_version)
+        if (t.meta && tx.version && (!o_.max_version || *tx.version > *o_.max_version))
             throw RpcError(code::version,
-                           "Transaction version (0) is not supported by the requesting client. Please try the request "
-                           "again with the following configuration parameter: \"maxSupportedTransactionVersion\": 0");
+                           std::format("Transaction version ({0}) is not supported by the requesting client. Please try the request "
+                                       "again with the following configuration parameter: \"maxSupportedTransactionVersion\": {0}", *tx.version));
         bool parsed = o_.encoding == Encoding::JsonParsed, accounts = o_.details == Details::Accounts;
         std::optional<AccountKeys> keys;
         if (parsed || accounts) keys.emplace(tx, t.meta ? &*t.meta : nullptr);
@@ -146,7 +146,7 @@ public:
             if (t.meta) meta(*t.meta, resolve);
             else w_.value(nullptr);
             if (t.meta && o_.max_version) {
-                if (tx.v0) w_.field("version", 0);
+                if (tx.version) w_.field("version", *tx.version);
                 else w_.field("version", "legacy");
             }
         });
@@ -209,7 +209,7 @@ private:
             w_.array_of(tx.instructions, [&](const CompiledInstruction& ix) {
                 instruction(keys, ix.program, ix.accounts, ix.data, 1u);  // TRANSACTION_LEVEL_STACK_HEIGHT
             });
-            if (tx.v0) {
+            if (tx.version == 0) {
                 w_.key("addressTableLookups");
                 w_.array_of(tx.lookups, [&](const AddressTableLookup& l) {
                     w_.object([&] {
@@ -219,6 +219,14 @@ private:
                         w_.key("readonlyIndexes");
                         index_array(l.readonly);
                     });
+                });
+            } else if (tx.config) {
+                w_.key("transactionConfig");
+                w_.object([&] {
+                    w_.field("priorityFee", tx.config->priority_fee);
+                    w_.field("computeUnitLimit", tx.config->compute_unit_limit);
+                    w_.field("loadedAccountsDataSizeLimit", tx.config->loaded_accounts_data_size_limit);
+                    w_.field("heapSize", tx.config->heap_size);
                 });
             }
         });
@@ -354,7 +362,7 @@ void get_block(Archive& archive, const BlockOptions& o, JsonWriter& w) {
                 }
                 std::optional<Meta> meta;
                 if (meta_frame) meta = decode_metadata(o.slot, meta_frame->reassemble(car), arena);
-                if (!meta && tx.v0) meta.emplace();  // default_meta for a v0 transaction
+                if (!meta && tx.version) meta.emplace();  // default_meta for versioned transactions
                 transactions.push_back({std::move(tx), std::move(meta)});
             }
         }

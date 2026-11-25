@@ -46,7 +46,7 @@ sealed class Lru<T> where T : notnull
     }
 }
 
-sealed record Options(string Encoding, string Details, bool Rewards, bool HasVersion);
+sealed record Options(string Encoding, string Details, bool Rewards, int? MaxVersion);
 
 sealed class Archive(string origin, CancellationToken shutdown)
 {
@@ -180,9 +180,10 @@ sealed class Archive(string origin, CancellationToken shutdown)
                     continue;
                 }
                 var meta = Car.Field(node, 2) is object?[] frame ? Metadata.ReadMeta(slot, car.Frame(frame)) : null;
-                if (tx.V0)
+                if (tx.Version is int version)
                 {
-                    if (!options.HasVersion) throw new RpcError(-32015, "Transaction version 0 requires maxSupportedTransactionVersion");
+                    if (options.MaxVersion is not int max || version > max)
+                        throw new RpcError(-32015, $"Transaction version ({version}) requires maxSupportedTransactionVersion >= {version}");
                     meta ??= new Meta();
                 }
                 transactions.Add(tx.Json(meta, options));
@@ -241,13 +242,15 @@ sealed class Rpc(Archive archive)
         string encoding = Text(cfg) ?? V("encoding", "json"), details = V("transactionDetails", "full");
         if (encoding is not ("json" or "jsonParsed" or "base64" or "base58") ||
             details is not ("full" or "accounts" or "signatures" or "none") ||
-            details == "accounts" && encoding != "json" ||
             V("commitment", "finalized") is not ("finalized" or "confirmed")) throw InvalidParams();
         var rewards = Field(cfg, "rewards");
         if (!Missing(rewards) && rewards.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) throw InvalidParams();
         var version = Field(cfg, "maxSupportedTransactionVersion");
-        if (!Missing(version)) UInt(version, 255);
-        return (slot, new Options(encoding, details, rewards.ValueKind != JsonValueKind.False, !Missing(version)));
+        int? maxVersion = Missing(version) ? null : (int)UInt(version, 255);
+        if (encoding == "base58" && maxVersion >= 1)
+            throw new RpcError(-32602, "base58 encoding is not supported with maxSupportedTransactionVersion >= 1");
+        if (details == "accounts" && encoding != "json") throw InvalidParams();
+        return (slot, new Options(encoding, details, rewards.ValueKind != JsonValueKind.False, maxVersion));
     }
 
     // JsonDocument defers decoding strings until accessed. Check Unicode throughout the envelope.

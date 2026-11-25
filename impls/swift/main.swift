@@ -42,7 +42,6 @@ private func params(_ value: Any?) throws -> (UInt64, Options) {
     }
     let encoding = try enumeration("encoding", ["json", "jsonParsed", "base64", "base58"])
     let details = try enumeration("transactionDetails", ["full", "accounts", "signatures", "none"])
-    if details == "accounts" && encoding != "json" { throw invalid }
     _ = try enumeration("commitment", ["finalized", "confirmed"])
     let rewards: Bool
     if let value = option("rewards") {
@@ -54,6 +53,10 @@ private func params(_ value: Any?) throws -> (UInt64, Options) {
         guard let version = (value as? JSONNumber)?.unsigned, version <= 255 else { throw invalid }
         maxVersion = version
     } else { maxVersion = nil }
+    if encoding == "base58" && (maxVersion ?? 0) >= 1 {
+        throw RpcFailure(-32602, "base58 encoding is not supported with maxSupportedTransactionVersion >= 1")
+    }
+    if details == "accounts" && encoding != "json" { throw invalid }
     return (slot, Options(encoding: encoding, details: details, rewards: rewards, maxVersion: maxVersion))
 }
 private func error(_ id: Any, _ code: Int, _ message: String) -> Reply {

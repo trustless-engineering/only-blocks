@@ -83,7 +83,10 @@ typedef struct {
 } lookup_t;
 
 typedef struct {
-    bool v0;
+    int version; /* -1 for legacy, 0 or 1 for versioned */
+    uint32_t config_mask; /* v1 only */
+    uint64_t priority_fee;
+    uint32_t compute_unit_limit, loaded_accounts_data_size_limit, heap_size;
     const uint8_t *sigs; /* nsigs × 64 bytes */
     size_t nsigs;
     uint8_t nrs, nros, nrou;

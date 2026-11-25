@@ -38,8 +38,14 @@ struct Inner {
 }
 
 struct Transaction {
+    private struct InstructionHeader {
+        let program: Int
+        let accounts: Int
+        let dataLength: Int
+    }
+
     let signatures: [[UInt8]]
-    let versioned: Bool
+    let version: UInt64?
     let signers: Int
     let readonlySigned: Int
     let readonlyUnsigned: Int
@@ -47,36 +53,68 @@ struct Transaction {
     let hash: String
     let instructions: [Instruction]
     let lookups: [Object]?
+    let config: Object?
     let raw: [UInt8]
     init(_ bytes: [UInt8]) throws {
         let r = Bytes(bytes)
-        signatures = try items(r.short()) { try r.bytes(64) }
-        let prefix = try r.u8()
-        try check(prefix <= 128)
-        versioned = prefix == 128
-        signers = versioned ? try r.u8() : prefix
-        readonlySigned = try r.u8()
-        readonlyUnsigned = try r.u8()
-        keys = try items(r.short()) { try r.bytes(32).b58 }
-        hash = try r.bytes(32).b58
-        instructions = try items(r.short()) { try instruction(r, 1) }
-        lookups = versioned ? try items(r.short()) {
-            ["accountKey": try r.bytes(32).b58,
-             "writableIndexes": try r.bytes(r.short()),
-             "readonlyIndexes": try r.bytes(r.short())]
-        } : nil
+        let first = try r.u8()
+        if first == 0x81 {
+            version = 1
+            signers = try r.u8()
+            readonlySigned = try r.u8()
+            readonlyUnsigned = try r.u8()
+            let mask = try r.u32()
+            let priorityBits = mask & 3
+            try check(mask & ~0x1f == 0 && (priorityBits == 0 || priorityBits == 3))
+            hash = try r.bytes(32).b58
+            let numInstructions = try r.u8()
+            keys = try items(r.u8()) { try r.bytes(32).b58 }
+            config = [
+                "priorityFee": nullable(priorityBits == 3 ? try r.u64() : nil),
+                "computeUnitLimit": nullable(mask & 4 != 0 ? try r.u32() : nil),
+                "loadedAccountsDataSizeLimit": nullable(mask & 8 != 0 ? try r.u32() : nil),
+                "heapSize": nullable(mask & 16 != 0 ? try r.u32() : nil),
+            ]
+            let headers = try items(numInstructions) {
+                try InstructionHeader(program: r.u8(), accounts: r.u8(), dataLength: Int(r.le(2)))
+            }
+            instructions = try headers.map {
+                try Instruction(program: $0.program, accounts: r.bytes($0.accounts), data: r.bytes($0.dataLength), height: 1)
+            }
+            signatures = try items(signers) { try r.bytes(64) }
+            lookups = nil
+        } else {
+            try check(first < 0x80)
+            signatures = try items(first) { try r.bytes(64) }
+            let prefix = try r.u8()
+            try check(prefix <= 0x80)
+            let v0 = prefix == 0x80
+            version = v0 ? 0 : nil
+            signers = v0 ? try r.u8() : prefix
+            readonlySigned = try r.u8()
+            readonlyUnsigned = try r.u8()
+            keys = try items(r.short()) { try r.bytes(32).b58 }
+            hash = try r.bytes(32).b58
+            instructions = try items(r.short()) { try instruction(r, 1) }
+            lookups = v0 ? try items(r.short()) {
+                ["accountKey": try r.bytes(32).b58,
+                 "writableIndexes": try r.bytes(r.short()),
+                 "readonlyIndexes": try r.bytes(r.short())]
+            } : nil
+            config = nil
+        }
         raw = Array(bytes[..<r.pos])
     }
 
     func json(_ input: Meta?, _ options: Options) throws -> Object {
-        let meta = input ?? (versioned ? Meta() : nil)
-        if versioned && options.maxVersion == nil {
-            throw RpcFailure(-32015, "Version 0 requires maxSupportedTransactionVersion")
+        if let version, options.maxVersion.map({ $0 >= version }) != true {
+            throw RpcFailure(-32015, "Transaction version (\(version)) requires maxSupportedTransactionVersion >= \(version)")
         }
+        let meta = input ?? (version != nil ? Meta() : nil)
         let parsed = options.encoding == "jsonParsed"
         let accountsOnly = options.details == "accounts"
-        let writable = versioned ? meta?.writable ?? [] : []
-        let combined = keys + writable + (versioned ? meta?.readonly ?? [] : [])
+        let writable = version == 0 ? meta?.writable ?? [] : []
+        let combined = keys + writable + (version == 0 ? meta?.readonly ?? [] : [])
         let parsedKeys = parsed ? combined : nil
         let tx: Any
         if options.encoding == "base64" { tx = [raw.b64, "base64"] }
@@ -106,12 +144,13 @@ struct Transaction {
                         "numReadonlySignedAccounts": readonlySigned, "numReadonlyUnsignedAccounts": readonlyUnsigned]
                 }
                 if let lookups { message["addressTableLookups"] = lookups }
+                if let config { message["transactionConfig"] = config }
                 tx = ["signatures": signatures, "message": message] as Object
             }
         }
         let output = try meta?.json(options, parsedKeys)
         var result: Object = ["transaction": tx, "meta": nullable(output)]
-        if meta != nil && options.maxVersion != nil { result["version"] = versioned ? 0 as Any : "legacy" }
+        if meta != nil && options.maxVersion != nil { result["version"] = (version as Any?) ?? "legacy" }
         return result
     }
 }

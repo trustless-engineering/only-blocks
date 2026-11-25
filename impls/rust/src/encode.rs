@@ -240,6 +240,28 @@ fn write_lookups(w: &mut Writer, tx: &VersionedTransaction) {
     w.end_arr();
 }
 
+fn write_message_extension(w: &mut Writer, tx: &VersionedTransaction) {
+    if tx.version == Some(0) {
+        write_lookups(w, tx);
+    } else if let Some(config) = &tx.config {
+        w.key("transactionConfig");
+        w.begin_obj();
+        for (name, value) in [
+            ("priorityFee", config.priority_fee),
+            ("computeUnitLimit", config.compute_unit_limit.map(u64::from)),
+            ("loadedAccountsDataSizeLimit", config.loaded_accounts_data_size_limit.map(u64::from)),
+            ("heapSize", config.heap_size.map(u64::from)),
+        ] {
+            w.key(name);
+            match value {
+                Some(value) => w.u64(value),
+                None => w.null(),
+            }
+        }
+        w.end_obj();
+    }
+}
+
 /// `encoding: "json"` transaction object (§13.3).
 fn write_json_transaction(w: &mut Writer, tx: &VersionedTransaction) {
     w.begin_obj();
@@ -267,17 +289,14 @@ fn write_json_transaction(w: &mut Writer, tx: &VersionedTransaction) {
         write_compiled(w, ix.program_id_index, &ix.accounts, &ix.data, Some(1));
     }
     w.end_arr();
-    if tx.version.is_some() {
-        write_lookups(w, tx);
-    }
+    write_message_extension(w, tx);
     w.end_obj();
     w.end_obj();
 }
 
-/// `encoding: "jsonParsed"` transaction object (§13.5). `meta` is the metadata of a v0
-/// `Complete` transaction (its loaded addresses extend the key list).
+/// `encoding: "jsonParsed"` transaction object (§13.5). Only v0 uses loaded addresses.
 fn write_parsed_transaction(w: &mut Writer, tx: &VersionedTransaction, meta: Option<&Meta>) -> Result<(), RpcError> {
-    let loaded = if tx.version.is_some() { meta } else { None };
+    let loaded = if tx.version == Some(0) { meta } else { None };
     let keys = combined_keys(tx, loaded);
     w.begin_obj();
     w.key("signatures");
@@ -294,9 +313,7 @@ fn write_parsed_transaction(w: &mut Writer, tx: &VersionedTransaction, meta: Opt
         write_partially_decoded(w, &keys, ix.program_id_index, &ix.accounts, &ix.data, Some(1))?;
     }
     w.end_arr();
-    if tx.version.is_some() {
-        write_lookups(w, tx);
-    }
+    write_message_extension(w, tx);
     w.end_obj();
     w.end_obj();
     Ok(())
@@ -569,7 +586,7 @@ fn write_transaction(w: &mut Writer, item: &TxWithMeta, raw: &[u8], opts: &Block
             w.kv_null("meta");
         }
         TxWithMeta::Complete(tx, meta) => {
-            let loaded = if tx.version.is_some() { Some(meta) } else { None };
+            let loaded = if tx.version == Some(0) { Some(meta) } else { None };
             w.key("transaction");
             if opts.details == Details::Accounts {
                 w.begin_obj();
@@ -605,7 +622,7 @@ fn write_transaction(w: &mut Writer, item: &TxWithMeta, raw: &[u8], opts: &Block
     Ok(())
 }
 
-/// The `-32015` gate (§13.2): any v0 `Complete` transaction without a max version fails.
+/// The `-32015` gate (§13.2): numeric versions require a sufficient client maximum.
 pub fn check_versions(txs: &[TxWithMeta], opts: &BlockOptions) -> Result<(), RpcError> {
     if !matches!(opts.details, Details::Full | Details::Accounts) {
         return Ok(());

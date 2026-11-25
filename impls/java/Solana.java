@@ -21,31 +21,61 @@ final class Solana {
             return obj("index", index, "instructions", instructions.stream().map(ix -> ix.json(keys)).toList());
         }
     }
-    record Options(String encoding, String details, boolean rewards, boolean maxVersion) {}
+    record Options(String encoding, String details, boolean rewards, Integer maxVersion) {}
     static final class Transaction {
+        private record InstructionHeader(int program, int accounts, int dataLength) {}
         final List<byte[]> signatures;
-        final boolean versioned;
+        final Integer version;
         final int signers, readonlySigned, readonlyUnsigned;
         final List<String> keys;
         final String hash;
         final List<Instruction> instructions;
         final List<?> lookups;
+        final Map<String, Object> config;
         final byte[] raw;
         Transaction(byte[] bytes) {
             var r = new Reader(bytes);
-            signatures = items(r.shortLength(), () -> r.bytes(64));
-            int prefix = r.u8();
-            check(prefix <= 128);
-            versioned = prefix == 128;
-            signers = versioned ? r.u8() : prefix;
-            readonlySigned = r.u8();
-            readonlyUnsigned = r.u8();
-            keys = items(r.shortLength(), () -> b58(r.bytes(32)));
-            hash = b58(r.bytes(32));
-            instructions = items(r.shortLength(), () -> instruction(r, 1L));
-            lookups = versioned ? items(r.shortLength(), () -> obj(
-                "accountKey", b58(r.bytes(32)), "writableIndexes", indices(r.bytes(r.shortLength())),
-                "readonlyIndexes", indices(r.bytes(r.shortLength())))) : null;
+            int first = r.u8();
+            if (first == 0x81) {
+                version = 1;
+                signers = r.u8();
+                readonlySigned = r.u8();
+                readonlyUnsigned = r.u8();
+                int mask = r.u32(), priorityBits = mask & 3;
+                check((mask & ~0x1f) == 0 && (priorityBits == 0 || priorityBits == 3));
+                hash = b58(r.bytes(32));
+                int numInstructions = r.u8();
+                keys = items(r.u8(), () -> b58(r.bytes(32)));
+                config = obj(
+                    "priorityFee", priorityBits == 3 ? uint(r.u64()) : null,
+                    "computeUnitLimit", (mask & 4) != 0 ? r.le(4) : null,
+                    "loadedAccountsDataSizeLimit", (mask & 8) != 0 ? r.le(4) : null,
+                    "heapSize", (mask & 16) != 0 ? r.le(4) : null);
+                var headers = items(numInstructions, () -> new InstructionHeader(r.u8(), r.u8(), (int) r.le(2)));
+                instructions = new ArrayList<>(numInstructions);
+                for (var h : headers) {
+                    instructions.add(new Instruction(h.program, r.bytes(h.accounts), r.bytes(h.dataLength), 1L));
+                }
+                signatures = items(signers, () -> r.bytes(64));
+                lookups = null;
+            } else {
+                check(first < 0x80);
+                signatures = items(first, () -> r.bytes(64));
+                int prefix = r.u8();
+                check(prefix <= 0x80);
+                boolean v0 = prefix == 0x80;
+                version = v0 ? 0 : null;
+                signers = v0 ? r.u8() : prefix;
+                readonlySigned = r.u8();
+                readonlyUnsigned = r.u8();
+                keys = items(r.shortLength(), () -> b58(r.bytes(32)));
+                hash = b58(r.bytes(32));
+                instructions = items(r.shortLength(), () -> instruction(r, 1L));
+                lookups = v0 ? items(r.shortLength(), () -> obj(
+                    "accountKey", b58(r.bytes(32)), "writableIndexes", indices(r.bytes(r.shortLength())),
+                    "readonlyIndexes", indices(r.bytes(r.shortLength())))) : null;
+                config = null;
+            }
             raw = Arrays.copyOf(bytes, r.pos);
         }
         private List<?> accounts(List<String> combined, int writableCount) {
@@ -66,13 +96,16 @@ final class Solana {
             return out;
         }
         Object json(Meta input, Options options) {
-            var meta = input == null && versioned ? new Meta() : input;
-            if (versioned && !options.maxVersion) throw new Server.RpcError(-32015, "Version 0 requires maxSupportedTransactionVersion");
+            if (version != null && (options.maxVersion == null || version > options.maxVersion)) {
+                throw new Server.RpcError(-32015, "Transaction version (" + version +
+                    ") requires maxSupportedTransactionVersion >= " + version);
+            }
+            var meta = input == null && version != null ? new Meta() : input;
             boolean parsed = options.encoding.equals("jsonParsed");
             boolean accountsOnly = options.details.equals("accounts");
             List<String> combined = new ArrayList<>(keys);
             int writableCount = 0;
-            if (versioned) {
+            if (lookups != null) {
                 combined.addAll(meta.writable);
                 combined.addAll(meta.readonly);
                 writableCount = meta.writable.size();
@@ -90,13 +123,14 @@ final class Solana {
                         "instructions", instructions.stream().map(ix -> ix.json(parsedKeys)).toList());
                     if (!parsed) message.put("header", obj("numRequiredSignatures", signers,
                         "numReadonlySignedAccounts", readonlySigned, "numReadonlyUnsignedAccounts", readonlyUnsigned));
-                    if (versioned) message.put("addressTableLookups", lookups);
+                    if (lookups != null) message.put("addressTableLookups", lookups);
+                    if (config != null) message.put("transactionConfig", config);
                     result.put("message", message);
                 }
                 tx = result;
             }
             var result = obj("transaction", tx, "meta", meta == null ? null : meta.json(options, parsedKeys));
-            if (meta != null && options.maxVersion) result.put("version", versioned ? 0 : "legacy");
+            if (meta != null && options.maxVersion != null) result.put("version", version == null ? "legacy" : version);
             return result;
         }
     }

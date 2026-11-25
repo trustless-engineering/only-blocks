@@ -94,7 +94,6 @@ std::optional<BlockOptions> block_options(const Json* params) {
     if (const auto* c = config.get("commitment");
         c && !c->is(Json::Kind::Null) && !c->is_string("finalized") && !c->is_string("confirmed"))
         return std::nullopt;
-    if (o.details == Details::Accounts && o.encoding != Encoding::Json) return std::nullopt;
     return o;
 }
 
@@ -122,6 +121,10 @@ void dispatch(Archive& archive, const Json& request, std::string& out) {
         return r.error(code::method, std::format("Method not found: {}", method->text), echo);
     auto options = block_options(params);
     if (!options) return r.error(code::params, "Invalid params", echo);
+    if (options->encoding == Encoding::Base58 && options->max_version.value_or(0) >= 1)
+        return r.error(code::params, "base58 encoding is not supported with maxSupportedTransactionVersion >= 1", echo);
+    if (options->details == Details::Accounts && options->encoding != Encoding::Json)
+        return r.error(code::params, "Invalid params", echo);
     auto mark = out.size();
     try {
         out += R"({"jsonrpc":"2.0","result":)";

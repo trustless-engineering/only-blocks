@@ -8,6 +8,7 @@ The build uses the locally provisioned toolchain in offline mode. The
 launch script execs the compiled binary.
 
 Zig's standard library provides HTTP, TLS, Zstd, JSON, and hashing.
+The transaction decoder supports legacy, v0 and v1 wire formats.
 Each HTTP request owns an arena for wire data and JSON construction.
 Intrusive lists back the two bounded, shared LRU caches. Frame validation
 around the standard Zstd decoder enforces the cumulative 512 MiB output

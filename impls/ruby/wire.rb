@@ -352,9 +352,40 @@ module Wire
       data: reader.take(reader.compact), stackHeight: height }
   end
 
+  def transaction_v1(reader)
+    header = { numRequiredSignatures: reader.u8, numReadonlySignedAccounts: reader.u8,
+               numReadonlyUnsignedAccounts: reader.u8 }
+    mask = reader.u32
+    priority_bits = mask & 0x03
+    require_valid(mask <= 0x1f && [0, 0x03].include?(priority_bits), 'Invalid v1 transaction config mask')
+    recent = pubkey(reader.take(32))
+    instruction_count = reader.u8
+    keys = reader.items(reader.u8, 32) { pubkey(reader.take(32)) }
+    config = {
+      priorityFee: priority_bits == 0x03 ? reader.u64 : nil,
+      computeUnitLimit: (mask & 0x04).zero? ? nil : reader.u32,
+      loadedAccountsDataSizeLimit: (mask & 0x08).zero? ? nil : reader.u32,
+      heapSize: (mask & 0x10).zero? ? nil : reader.u32
+    }
+    # All headers precede the payloads, which are laid out in instruction order.
+    headers = reader.items(instruction_count, 4) { [reader.u8, reader.u8, reader.fixed(2, 'v')] }
+    instructions = headers.map do |program, account_count, data_length|
+      { programIdIndex: program, accounts: reader.take(account_count),
+        data: reader.take(data_length), stackHeight: 1 }
+    end
+    signatures = reader.items(header[:numRequiredSignatures], 64) { reader.take(64) }
+    message = { header: header, accountKeys: keys, recentBlockhash: recent,
+                instructions: instructions, transactionConfig: config }
+    [1, signatures, message, reader.data.byteslice(0, reader.pos)]
+  end
+
   def transaction(data)
     reader = Reader.new(data)
-    signatures = reader.items(reader.compact, 64) { reader.take(64) }
+    discriminator = reader.u8
+    return transaction_v1(reader) if discriminator == 0x81
+
+    require_valid(discriminator < 0x80, 'Invalid transaction discriminator')
+    signatures = reader.items(discriminator, 64) { reader.take(64) }
     prefix = reader.u8
     require_valid(prefix <= 128, 'Unsupported wire transaction version')
     version = prefix == 128 ? 0 : 'legacy'

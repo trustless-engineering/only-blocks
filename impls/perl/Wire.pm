@@ -290,9 +290,41 @@ sub instruction {
     return {programIdIndex => u8($r), accounts => take($r, compact($r)),
             data => take($r, compact($r)), stackHeight => $height};
 }
+sub transaction_v1 {
+    my ($r) = @_;
+    my $header = {numRequiredSignatures => u8($r), numReadonlySignedAccounts => u8($r),
+                  numReadonlyUnsignedAccounts => u8($r)};
+    my $mask = u32($r);
+    my $priority_bits = $mask & 0x03;
+    die "Invalid v1 transaction config mask\n" if $mask > 0x1f || ($priority_bits && $priority_bits != 0x03);
+    my $recent = pubkey(take($r, 32));
+    my $instruction_count = u8($r);
+    my $keys = items($r, u8($r), 32, sub { pubkey(take($_[0], 32)) });
+    my $config = {
+        priorityFee => $priority_bits == 0x03 ? scalar u64($r) : undef,
+        computeUnitLimit => $mask & 0x04 ? scalar u32($r) : undef,
+        loadedAccountsDataSizeLimit => $mask & 0x08 ? scalar u32($r) : undef,
+        heapSize => $mask & 0x10 ? scalar u32($r) : undef,
+    };
+    # All headers precede the payloads, which are laid out in instruction order.
+    my $headers = items($r, $instruction_count, 4, sub { [unpack 'CCv', take($_[0], 4)] });
+    my @instructions = map {
+        my ($program, $account_count, $data_length) = @$_;
+        {programIdIndex => $program, accounts => take($r, $account_count),
+         data => take($r, $data_length), stackHeight => 1};
+    } @$headers;
+    my $signatures = items($r, $header->{numRequiredSignatures}, 64, sub { take($_[0], 64) });
+    my $message = {header => $header, accountKeys => $keys, recentBlockhash => $recent,
+                   instructions => \@instructions, transactionConfig => $config};
+    return (1, $signatures, $message, substr($r->[0], 0, $r->[1]));
+}
+
 sub transaction {
     my $r = reader($_[0]);
-    my $signatures = items($r, compact($r), 64, sub { take($_[0], 64) });
+    my $discriminator = u8($r);
+    return transaction_v1($r) if $discriminator == 0x81;
+    die "Invalid transaction discriminator\n" if $discriminator >= 0x80;
+    my $signatures = items($r, $discriminator, 64, sub { take($_[0], 64) });
     my $prefix = u8($r);
     die "Unsupported wire transaction version\n" if $prefix > 128;
     my $v0 = $prefix == 128;

@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/base64"
+	"fmt"
 	"slices"
 	"strings"
 )
@@ -16,13 +17,14 @@ type innerGroup struct {
 	instructions []instruction
 }
 type transaction struct {
-	v0           bool
+	version      int // -1 means legacy.
 	header       [3]byte
 	signatures   [][]byte
 	keys         []string
 	hash         string
 	instructions []instruction
 	lookups      []obj
+	config       obj
 	raw          []byte
 }
 
@@ -31,19 +33,26 @@ func compileInstruction(r *reader, stack any) instruction {
 }
 func decodeTransaction(data []byte) transaction {
 	r := reader{data}
-	tx := transaction{}
-	tx.signatures = list(&r, uint64(r.compact()), 64, func() []byte { return r.take(64) })
+	first := r.u8()
+	if first == 0x81 {
+		tx := decodeV1(&r)
+		tx.raw = data[:len(data)-len(r.left)]
+		return tx
+	}
+	need(first < 0x80, "invalid transaction discriminator")
+	tx := transaction{version: -1}
+	tx.signatures = list(&r, uint64(first), 64, func() []byte { return r.take(64) })
 	prefix := r.u8()
 	need(prefix <= 128, "unsupported transaction version")
-	tx.v0 = prefix == 128
-	if tx.v0 {
+	if prefix == 128 {
+		tx.version = 0
 		prefix = r.u8()
 	}
 	tx.header = [3]byte{prefix, r.u8(), r.u8()}
 	tx.keys = list(&r, uint64(r.compact()), 32, func() string { return pubkey(r.take(32)) })
 	tx.hash = pubkey(r.take(32))
 	tx.instructions = list(&r, uint64(r.compact()), 3, func() instruction { return compileInstruction(&r, 1) })
-	if tx.v0 {
+	if tx.version == 0 {
 		tx.lookups = list(&r, uint64(r.compact()), 34, func() obj {
 			return obj{"accountKey": pubkey(r.take(32)), "writableIndexes": indexes(r.take(r.compact())), "readonlyIndexes": indexes(r.take(r.compact()))}
 		})
@@ -51,6 +60,39 @@ func decodeTransaction(data []byte) transaction {
 	tx.raw = data[:len(data)-len(r.left)]
 	return tx
 }
+
+func decodeV1(r *reader) transaction {
+	tx := transaction{version: 1, header: [3]byte{r.u8(), r.u8(), r.u8()}}
+	mask := r.u32()
+	priorityBits := mask & 3
+	need(mask&^0x1f == 0 && (priorityBits == 0 || priorityBits == 3), "invalid transaction config mask")
+	tx.hash = pubkey(r.take(32))
+	numInstructions, numKeys := r.u8(), r.u8()
+	tx.keys = list(r, uint64(numKeys), 32, func() string { return pubkey(r.take(32)) })
+	tx.config = obj{"priorityFee": nil, "computeUnitLimit": nil, "loadedAccountsDataSizeLimit": nil, "heapSize": nil}
+	if priorityBits == 3 {
+		tx.config["priorityFee"] = r.u64()
+	}
+	for i, key := range []string{"computeUnitLimit", "loadedAccountsDataSizeLimit", "heapSize"} {
+		if mask&(4<<i) != 0 {
+			tx.config[key] = r.u32()
+		}
+	}
+	type instructionHeader struct {
+		program        byte
+		accounts, data int
+	}
+	headers := list(r, uint64(numInstructions), 4, func() instructionHeader {
+		return instructionHeader{r.u8(), int(r.u8()), int(r.le(2))}
+	})
+	tx.instructions = make([]instruction, 0, len(headers))
+	for _, h := range headers {
+		tx.instructions = append(tx.instructions, instruction{h.program, r.take(h.accounts), r.take(h.data), 1})
+	}
+	tx.signatures = list(r, uint64(tx.header[0]), 64, func() []byte { return r.take(64) })
+	return tx
+}
+
 func indexes(p []byte) []int {
 	a := make([]int, len(p))
 	for i, b := range p {
@@ -109,7 +151,7 @@ Sysvar1111111111111111111111111111111111111`) {
 
 func (tx transaction) accounts(meta obj) ([]obj, []string) {
 	var writable, readonly []string
-	if tx.v0 && meta != nil {
+	if tx.version == 0 && meta != nil {
 		loaded := meta["loadedAddresses"].(obj)
 		writable = loaded["writable"].([]string)
 		readonly = loaded["readonly"].([]string)
@@ -142,9 +184,9 @@ func (tx transaction) accounts(meta obj) ([]obj, []string) {
 	return accounts, keys
 }
 func (tx transaction) json(meta obj, options blockOptions) obj {
-	if tx.v0 {
-		if !options.version {
-			panic(rpcFailure{-32015, "Transaction version (0) requires maxSupportedTransactionVersion: 0"})
+	if tx.version >= 0 {
+		if tx.version > options.maxVersion {
+			fail(-32015, fmt.Sprintf("Transaction version (%d) requires maxSupportedTransactionVersion >= %d", tx.version, tx.version))
 		}
 		if meta == nil {
 			meta = emptyMeta()
@@ -180,8 +222,11 @@ func (tx transaction) json(meta obj, options blockOptions) obj {
 			if !parsed {
 				message["header"] = obj{"numRequiredSignatures": tx.header[0], "numReadonlySignedAccounts": tx.header[1], "numReadonlyUnsignedAccounts": tx.header[2]}
 			}
-			if tx.v0 {
+			if tx.version == 0 {
 				message["addressTableLookups"] = tx.lookups
+			}
+			if tx.config != nil {
+				message["transactionConfig"] = tx.config
 			}
 			value["message"] = message
 		}
@@ -189,9 +234,9 @@ func (tx transaction) json(meta obj, options blockOptions) obj {
 	}
 	out := obj{"transaction": encoded, "meta": nil}
 	if meta != nil {
-		if options.version {
-			if tx.v0 {
-				out["version"] = 0
+		if options.maxVersion >= 0 {
+			if tx.version >= 0 {
+				out["version"] = tx.version
 			} else {
 				out["version"] = "legacy"
 			}

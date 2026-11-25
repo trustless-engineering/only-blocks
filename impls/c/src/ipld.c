@@ -465,17 +465,58 @@ static bytes_t short_vec(tr_t *r) {
     return b;
 }
 
+static void parse_v1(tr_t *r, tx_t *tx) {
+    tx->version = 1;
+    tx->nrs = tr_u8(r);
+    tx->nros = tr_u8(r);
+    tx->nrou = tr_u8(r);
+    uint32_t mask = rd32le(tr_take(r, 4));
+    if ((mask & ~0x1Fu) || (mask & 3) == 1 || (mask & 3) == 2)
+        DIE(r->c, "invalid v1 transaction config mask");
+    tx->config_mask = mask;
+    tx->blockhash = tr_take(r, 32);
+    tx->nix = tr_u8(r);
+    tx->nkeys = tr_u8(r);
+    tx->keys = tr_take(r, tx->nkeys * 32);
+    if (mask & 3) tx->priority_fee = rd64le(tr_take(r, 8));
+    if (mask & 4) tx->compute_unit_limit = rd32le(tr_take(r, 4));
+    if (mask & 8) tx->loaded_accounts_data_size_limit = rd32le(tr_take(r, 4));
+    if (mask & 16) tx->heap_size = rd32le(tr_take(r, 4));
+
+    const uint8_t *headers = tr_take(r, tx->nix * 4);
+    tx->ix = acalloc(r->c, tx->nix ? tx->nix : 1, sizeof *tx->ix);
+    for (size_t i = 0; i < tx->nix; i++) {
+        const uint8_t *h = headers + 4 * i;
+        cix_t *ix = &tx->ix[i];
+        ix->program = h[0];
+        ix->accounts.n = h[1];
+        ix->accounts.p = tr_take(r, ix->accounts.n);
+        ix->data.n = rd16le(h + 2);
+        ix->data.p = tr_take(r, ix->data.n);
+    }
+    tx->nsigs = tx->nrs;
+    tx->sigs = tr_take(r, tx->nsigs * 64);
+}
+
 void parse_transaction(ctx_t *c, bytes_t in, tx_t *tx) {
     tr_t r = {c, in.p, in.n, 0};
     memset(tx, 0, sizeof *tx);
-    tx->nsigs = compact_u16(&r);
+    uint8_t discriminator = tr_u8(&r);
+    if (discriminator == 0x81) {
+        parse_v1(&r, tx);
+        tx->raw = (bytes_t){in.p, r.pos};
+        return;
+    }
+    if (discriminator >= 0x80) DIE(c, "invalid transaction discriminator");
+    tx->version = -1;
+    tx->nsigs = discriminator;
     tx->sigs = tr_take(&r, tx->nsigs * 64);
     uint8_t prefix = tr_u8(&r);
     if (prefix & 0x80) {
         int version = prefix & 0x7F;
         if (version == 127) DIE(c, "off-chain messages are not accepted");
         if (version != 0) DIE(c, "unsupported transaction version %d", version);
-        tx->v0 = true;
+        tx->version = 0;
         tx->nrs = tr_u8(&r);
     } else {
         tx->nrs = prefix;
@@ -493,7 +534,7 @@ void parse_transaction(ctx_t *c, bytes_t in, tx_t *tx) {
         tx->ix[i].accounts = short_vec(&r);
         tx->ix[i].data = short_vec(&r);
     }
-    if (tx->v0) {
+    if (tx->version == 0) {
         tx->nlookups = compact_u16(&r);
         if (tx->nlookups > (r.n - r.pos) / 34) DIE(c, "lookup count exceeds input");
         tx->lookups = acalloc(c, tx->nlookups ? tx->nlookups : 1, sizeof *tx->lookups);

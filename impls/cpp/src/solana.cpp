@@ -578,6 +578,48 @@ std::string TransactionError::json() const {
 
 Transaction Transaction::parse(Bytes wire) {
     Reader r(wire);
+    const auto discriminator = r.u8();
+    auto read_list = [&](std::size_t n, std::size_t min_size, auto&& read) {
+        require(n <= r.remaining() / min_size, "count exceeds input");
+        std::vector<decltype(read())> out;
+        out.reserve(n);
+        for (std::size_t i = 0; i < n; ++i) out.push_back(read());
+        return out;
+    };
+    auto read_signatures = [&](std::size_t n) { return read_list(n, 64, [&] { return r.take(64); }); };
+    auto read_keys = [&](std::size_t n) { return read_list(n, 32, [&] { return r.take(32); }); };
+
+    Transaction tx;
+    if (discriminator == 0x81) {
+        tx.version = 1;
+        tx.num_required = r.u8();
+        tx.num_readonly_signed = r.u8();
+        tx.num_readonly_unsigned = r.u8();
+        const auto mask = r.le<std::uint32_t>();
+        require(!(mask & ~0x1fu) && ((mask & 3) == 0 || (mask & 3) == 3), "invalid v1 transaction config mask");
+        tx.recent_blockhash = r.take(32);
+        const auto instruction_count = r.u8();
+        tx.keys = read_keys(r.u8());
+        auto& config = tx.config.emplace();
+        if (mask & 3) config.priority_fee = r.le<std::uint64_t>();
+        if (mask & 4) config.compute_unit_limit = r.le<std::uint32_t>();
+        if (mask & 8) config.loaded_accounts_data_size_limit = r.le<std::uint32_t>();
+        if (mask & 16) config.heap_size = r.le<std::uint32_t>();
+
+        Reader headers(r.take(static_cast<std::size_t>(instruction_count) * 4));
+        tx.instructions.reserve(instruction_count);
+        while (!headers.empty()) {
+            const auto program = headers.u8();
+            const auto account_count = headers.u8();
+            const auto data_len = headers.le<std::uint16_t>();
+            tx.instructions.push_back({program, r.take(account_count), r.take(data_len)});
+        }
+        tx.signatures = read_signatures(tx.num_required);
+        tx.raw = r.consumed();
+        return tx;
+    }
+    require(discriminator < 0x80, "invalid transaction discriminator");
+
     auto compact_u16 = [&] {
         std::uint32_t v = 0;
         for (int k = 0; k < 3; ++k) {
@@ -591,41 +633,31 @@ Transaction Transaction::parse(Bytes wire) {
         }
         fail("compact-u16 continues past the third byte");
     };
-    auto list = [&](std::size_t min_size, auto&& read) {
-        auto n = compact_u16();
-        require(n <= r.remaining() / min_size, "count exceeds input");
-        std::vector<decltype(read())> out;
-        out.reserve(n);
-        for (std::size_t i = 0; i < n; ++i) out.push_back(read());
-        return out;
-    };
     auto short_vec = [&] { return r.take(compact_u16()); };
-
-    Transaction tx;
-    tx.signatures = list(64, [&] { return r.take(64); });
+    tx.signatures = read_signatures(discriminator);
     auto prefix = r.u8();
     if (prefix & 0x80) {
         auto version = prefix & 0x7F;
         require(version != 127, "off-chain messages are not accepted");
         require(version == 0, "unsupported transaction version");
-        tx.v0 = true;
+        tx.version = 0;
         tx.num_required = r.u8();
     } else {
         tx.num_required = prefix;
     }
     tx.num_readonly_signed = r.u8();
     tx.num_readonly_unsigned = r.u8();
-    tx.keys = list(32, [&] { return r.take(32); });
+    tx.keys = read_keys(compact_u16());
     tx.recent_blockhash = r.take(32);
-    tx.instructions = list(3, [&] {
+    tx.instructions = read_list(compact_u16(), 3, [&] {
         CompiledInstruction ix;
         ix.program = r.u8();
         ix.accounts = short_vec();
         ix.data = short_vec();
         return ix;
     });
-    if (tx.v0) {
-        tx.lookups = list(34, [&] {
+    if (tx.version == 0) {
+        tx.lookups = read_list(compact_u16(), 34, [&] {
             AddressTableLookup l;
             l.account_key = r.take(32);
             l.writable = short_vec();

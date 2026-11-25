@@ -56,8 +56,9 @@ sub tx_json {
     my ($tx, $m, $encoding, $details, $rewards, $max) = @_;
     my ($version, $signatures, $message, $raw) = @$tx;
     my $v0 = $version eq '0';
-    if ($v0) {
-        rpc_fail(-32015, 'Transaction version (0) requires maxSupportedTransactionVersion') unless defined $max;
+    if ($version ne 'legacy') {
+        rpc_fail(-32015, "Transaction version ($version) requires maxSupportedTransactionVersion: $version")
+            if !defined($max) || $version > $max;
         $m //= empty_meta();
     }
     my $accounts = $details eq 'accounts';
@@ -454,10 +455,14 @@ sub params {
     my $commitment = $cfg->{commitment} // 'finalized';
     invalid() if ref($encoding) || $encoding !~ /\A(?:json|jsonParsed|base64|base58)\z/
                  || ref($details) || $details !~ /\A(?:full|accounts|signatures|none)\z/
-                 || $details eq 'accounts' && $encoding ne 'json' || !JSON::PP::is_bool($rewards)
+                 || !JSON::PP::is_bool($rewards)
                  || ref($commitment) || $commitment !~ /\A(?:finalized|confirmed)\z/;
     my $max = $cfg->{maxSupportedTransactionVersion};
-    return ($slot, $encoding, $details, $rewards, defined($max) ? uint_param($max, 255) : undef);
+    $max = uint_param($max, 255) if defined $max;
+    rpc_fail(-32602, 'base58 encoding is not supported with maxSupportedTransactionVersion >= 1')
+        if $encoding eq 'base58' && defined($max) && $max >= 1;
+    invalid() if $details eq 'accounts' && $encoding ne 'json';
+    return ($slot, $encoding, $details, $rewards, $max);
 }
 sub response {
     my ($id, $field, $value) = @_;

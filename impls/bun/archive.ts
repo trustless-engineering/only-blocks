@@ -421,9 +421,56 @@ function compiledInstruction(reader: Reader, stackHeight: number | null): Instru
   };
 }
 
+function transactionV1(reader: Reader) {
+  const header = {
+    numRequiredSignatures: reader.u8(),
+    numReadonlySignedAccounts: reader.u8(),
+    numReadonlyUnsignedAccounts: reader.u8(),
+  };
+  const mask = reader.u32();
+  const priorityBits = mask & 0x03;
+  check(mask <= 0x1f && (priorityBits === 0 || priorityBits === 0x03), 'Invalid v1 transaction config mask');
+  const recentBlockhash = pubkey(reader.take(32));
+  const instructionCount = reader.u8();
+  const accountKeys = reader.list(reader.u8(), (r) => pubkey(r.take(32)), 32);
+  const transactionConfig = {
+    priorityFee: priorityBits === 0x03 ? reader.u64() : null,
+    computeUnitLimit: mask & 0x04 ? reader.u32() : null,
+    loadedAccountsDataSizeLimit: mask & 0x08 ? reader.u32() : null,
+    heapSize: mask & 0x10 ? reader.u32() : null,
+  };
+  // All headers precede the payloads, which are laid out in instruction order.
+  const instructionHeaders = reader.list(instructionCount, (r) => ({
+    programIdIndex: r.u8(),
+    accountCount: r.u8(),
+    dataLength: r.u16(),
+  }), 4);
+  const instructions = instructionHeaders.map(({ programIdIndex, accountCount, dataLength }) => ({
+    programIdIndex,
+    accounts: reader.take(accountCount),
+    data: reader.take(dataLength),
+    stackHeight: 1,
+  }));
+  const signatures = reader.list(header.numRequiredSignatures, (r) => r.take(64), 64);
+  return {
+    version: 1 as const,
+    signatures,
+    header,
+    accountKeys,
+    recentBlockhash,
+    instructions,
+    addressTableLookups: undefined,
+    transactionConfig,
+    raw: reader.bytes.subarray(0, reader.pos),
+  };
+}
+
 function transaction(bytes: Bytes) {
   const reader = new Reader(bytes);
-  const signatures = reader.list(reader.compact(), (r) => r.take(64), 64);
+  const discriminator = reader.u8();
+  if (discriminator === 0x81) return transactionV1(reader);
+  check(discriminator < 0x80, 'Invalid transaction discriminator');
+  const signatures = reader.list(discriminator, (r) => r.take(64), 64);
   const prefix = reader.u8();
   check(prefix <= 128, 'Unsupported transaction wire version');
   const version: 0 | 'legacy' = prefix === 128 ? 0 : 'legacy';
@@ -450,6 +497,7 @@ function transaction(bytes: Bytes) {
     recentBlockhash,
     instructions,
     addressTableLookups,
+    transactionConfig: undefined,
     raw: bytes.subarray(0, reader.pos),
   };
 }
@@ -1126,9 +1174,12 @@ function instructionJson(ix: Instruction, keys?: string[]) {
 }
 
 function transactionJson(tx: Transaction, meta: Meta | null, options: BlockOptions) {
-  if (!meta && tx.version === 0) meta = emptyMeta();
-  if (tx.version === 0 && options.maxVersion === null) {
-    throw new RpcError(-32015, 'Transaction version (0) requires "maxSupportedTransactionVersion": 0');
+  const { version } = tx;
+  if (version !== 'legacy') {
+    if (options.maxVersion === null || version > options.maxVersion) {
+      throw new RpcError(-32015, `Transaction version (${version}) requires "maxSupportedTransactionVersion": ${version}`);
+    }
+    meta ??= emptyMeta();
   }
   const { encoding, details } = options;
   const parsed = encoding === 'jsonParsed';
@@ -1150,6 +1201,7 @@ function transactionJson(tx: Transaction, meta: Meta | null, options: BlockOptio
         recentBlockhash: tx.recentBlockhash,
         instructions: tx.instructions.map((ix) => instructionJson(ix, keys)),
         addressTableLookups: tx.addressTableLookups,
+        transactionConfig: tx.transactionConfig,
       },
     };
   }

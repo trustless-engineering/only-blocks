@@ -39,7 +39,8 @@ func errorResponse(id any, code int, message string) obj {
 type blockOptions struct {
 	slot              uint64
 	encoding, details string
-	rewards, version  bool
+	rewards           bool
+	maxVersion        int // -1 means absent.
 }
 
 func uintLexeme(v any, bits int) (uint64, bool) {
@@ -60,7 +61,7 @@ func params(v any) blockOptions {
 	if !ok {
 		invalid()
 	}
-	options := blockOptions{slot: slot, encoding: "json", details: "full", rewards: true}
+	options := blockOptions{slot: slot, encoding: "json", details: "full", rewards: true, maxVersion: -1}
 	var config obj
 	switch c := item(p, 1).(type) {
 	case nil:
@@ -85,9 +86,6 @@ func params(v any) blockOptions {
 	readString("transactionDetails", &options.details, "full", "accounts", "signatures", "none")
 	var commitment string
 	readString("commitment", &commitment, "finalized", "confirmed")
-	if options.details == "accounts" && options.encoding != "json" {
-		invalid()
-	}
 	if v := config["rewards"]; v != nil {
 		options.rewards, ok = v.(bool)
 		if !ok {
@@ -95,10 +93,17 @@ func params(v any) blockOptions {
 		}
 	}
 	if v := config["maxSupportedTransactionVersion"]; v != nil {
-		_, options.version = uintLexeme(v, 8)
-		if !options.version {
+		version, valid := uintLexeme(v, 8)
+		if !valid {
 			invalid()
 		}
+		options.maxVersion = int(version)
+	}
+	if options.encoding == "base58" && options.maxVersion >= 1 {
+		fail(-32602, "base58 encoding is not supported with maxSupportedTransactionVersion >= 1")
+	}
+	if options.details == "accounts" && options.encoding != "json" {
+		invalid()
 	}
 	return options
 }

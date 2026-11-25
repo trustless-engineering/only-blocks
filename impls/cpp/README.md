@@ -23,7 +23,7 @@ separate design, not the C implementation recompiled:
 | `json.cpp` | strict RFC 8259 parser that keeps **lexemes** (`Json::raw`), so ids echo byte for byte and slots are validated on their source text |
 | `archive.cpp` | Range client, §4.3 retry policy, `std::counting_semaphore<32>` held only while an attempt is in flight, and `LruCache<K, V>` (`std::list::splice` + `unordered_map`) |
 | `ipld.cpp` | DAG-CBOR, CIDs, a **zero-copy `CarIndex`** (`unordered_map<string_view, span<const uint8_t>>` straight over the slice), DataFrames, Block nodes |
-| `solana.cpp` | the `VersionedTransaction` parser, protobuf (a `Proto` field cursor with prost semantics), bincode, and the §9 zstd/codec fallback |
+| `solana.cpp` | the legacy, v0 and v1 `VersionedTransaction` parser, protobuf (a `Proto` field cursor with prost semantics), bincode, and the §9 zstd/codec fallback |
 | `zstd.cpp` | the full RFC 8878 decoder as a `FrameDecoder` class: FSE/Huffman tables, 4-stream literals, repeat offsets, XXH64, skippable and concatenated frames, the 512 MiB limit |
 | `block.cpp` | the getBlock pipeline and the exact §13 JSON |
 | `core.cpp` | Base58, Base64, CRC-64/GO-ISO, FNV-1a, XXH64, UTF-8, `uiAmountString` |

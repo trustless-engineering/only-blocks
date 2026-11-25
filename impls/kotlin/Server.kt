@@ -200,12 +200,15 @@ private fun blockParams(value: Any?): Pair<ULong, BlockOptions> {
     }
     val encoding = str("encoding", "json", setOf("json", "jsonParsed", "base64", "base58"))
     val details = str("transactionDetails", "full", setOf("full", "accounts", "signatures", "none"))
-    if (details == "accounts" && encoding != "json") invalid()
     str("commitment", "finalized", setOf("finalized", "confirmed"))
     val rewards = config["rewards"]?.let { it as? Boolean ?: invalid() } ?: true
     val version = config["maxSupportedTransactionVersion"]?.let {
         (it as? JsonNumber)?.asUnsigned()?.takeIf { n -> n <= 255uL } ?: invalid()
     }
+    if (encoding == "base58" && (version ?: 0uL) >= 1uL) {
+        throw RpcFailure(-32602, "base58 encoding is not supported with maxSupportedTransactionVersion >= 1")
+    }
+    if (details == "accounts" && encoding != "json") invalid()
     return slot to BlockOptions(encoding, details, rewards, version)
 }
 private fun rpcError(id: Any?, code: Int, message: String) =
