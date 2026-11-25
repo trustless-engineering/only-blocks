@@ -1,61 +1,8 @@
-# meta.awk: zstd frame unwrapping, protobuf and bincode transaction metadata
-# and rewards, TransactionError, and the getBlock JSON serializer.
+# meta.awk: zstd unwrapping (decoder in zstd.awk), protobuf and bincode
+# transaction metadata and rewards, TransactionError, and the getBlock JSON
+# serializer.
 
-# ---------------------------------------------------------------------- zstd
-
-function is_zstd_magic(p) { return M[p] == 40 && M[p + 1] == 181 && M[p + 2] == 47 && M[p + 3] == 253 }
-
-# Walks the frame boundaries (RFC 8878 §3.1) so only well-formed zstd frames
-# reach the CLI (which would happily decode gzip or xz), then decompresses
-# them with `zstd -d`. Output at M[ZS_S .. ZS_S+ZS_N); 0 on any failure.
-function zstd_dec(s, n,   p, e, d, single, k, hdr, last, type, size, fs, hex, cmd, start, cnt) {
-    p = s; e = s + n; hex = ""
-    while (p < e) {
-        if (p + 4 > e) return 0
-        if (M[p] >= 80 && M[p] <= 95 && M[p + 1] == 42 && M[p + 2] == 77 && M[p + 3] == 24) {
-            if (p + 8 > e) return 0
-            size = le32(p + 4)
-            if (p + 8 + size > e) return 0
-            p += 8 + size
-            continue
-        }
-        if (!is_zstd_magic(p)) return 0
-        fs = p; p += 4
-        if (p >= e) return 0
-        d = M[p++]
-        if (int(d / 8) % 2) return 0
-        single = int(d / 32) % 2
-        if (!single) { if (p >= e) return 0; p++ }
-        k = d % 4; k = (k == 3) ? 4 : k
-        if (p + k > e) return 0
-        while (k-- > 0) if (M[p++] != 0) return 0
-        k = int(d / 64); k = (k == 0) ? single : (k == 1) ? 2 : (k == 2) ? 4 : 8
-        if (p + k > e) return 0
-        p += k
-        do {
-            if (p + 3 > e) return 0
-            hdr = M[p] + M[p + 1] * 256 + M[p + 2] * 65536
-            p += 3
-            last = hdr % 2; type = int(hdr / 2) % 4; size = int(hdr / 8)
-            if (type == 3 || size > 131072) return 0
-            size = (type == 1) ? 1 : size
-            if (p + size > e) return 0
-            p += size
-        } while (!last)
-        if (int(d / 4) % 2) { if (p + 4 > e) return 0; p += 4 }
-        hex = hex mhex(fs, p - fs)
-    }
-    if (hex == "") { ZS_S = MTOP; ZS_N = 0; return 1 }
-    if (length(hex) > 900000) return 0
-    cmd = "printf %s " hex " | " XXD " -r -p | { " ZSTD " -dcq 2>/dev/null && printf Y || printf N; } | " OD " -An -v -tx1"
-    start = MTOP
-    cnt = slurp(cmd)
-    if (cnt < 1 || M[MTOP - 1] != 89) { MTOP = start; return 0 }
-    MTOP--
-    if (MTOP - start > 536870912) { MTOP = start; return 0 }
-    ZS_S = start; ZS_N = MTOP - start
-    return 1
-}
+# ------------------------------------------------------------------ unwrap
 
 # WIRE_FORMATS §9.1 for kind "m" (metadata) or "r" (rewards). For metadata an
 # empty frame sets QNONE.

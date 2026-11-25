@@ -3,8 +3,9 @@
 # Bash owns the sockets: the `accept` loadable builtin (shipped with bash)
 # listens, one forked subshell per connection frames HTTP/1.1, and a single
 # long-lived AWK coprocess (main.awk) holds both LRU caches and does all the
-# decoding. Nothing touches the disk: requests and replies cross anonymous
-# pipes, never here-documents, here-strings, FIFOs or temp files.
+# decoding, Zstandard included (zstd.awk). Nothing touches the disk: requests
+# and replies cross anonymous pipes, never here-documents, here-strings, FIFOs
+# or temp files.
 
 export LC_ALL=C
 DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
@@ -43,14 +44,12 @@ enable -f accept accept 2>/dev/null || enable -f "$loadables/accept" accept 2>/d
     die "this bash ($BASH_VERSION) does not ship the 'accept' loadable builtin"
 enable -f sleep sleep 2>/dev/null || enable -f "$loadables/sleep" sleep 2>/dev/null
 
-tool() { command -v "$1" 2>/dev/null || printf '%s' "$2"; }
 export OB_BASE=$base OB_DIR=$DIR OB_BASH=$BASH
-export OB_ZSTD=$(tool zstd /opt/homebrew/bin/zstd) OB_XXD=$(tool xxd /usr/bin/xxd)
 export OB_OD=/usr/bin/od OB_CURL=/usr/bin/curl
 
 coproc ENGINE {
     exec /usr/bin/awk -f "$DIR/lib.awk" -f "$DIR/json.awk" -f "$DIR/wire.awk" \
-        -f "$DIR/meta.awk" -f "$DIR/main.awk"
+        -f "$DIR/zstd.awk" -f "$DIR/meta.awk" -f "$DIR/main.awk"
 }
 exec {TO}>&"${ENGINE[1]}" {FROM}<&"${ENGINE[0]}"
 

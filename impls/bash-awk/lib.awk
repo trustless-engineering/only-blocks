@@ -313,7 +313,7 @@ function utf8str(v,   n, k, cn, ca, j, b, need, lo, hi) {
     return need == 0
 }
 
-# Hex text of M[s .. s+n), used as CID map keys and for xxd.
+# Hex text of M[s .. s+n), used as CID map keys.
 function mhex(s, n,   i, out) {
     out = ""
     for (i = 0; i < n; i++) out = out HEXS[M[s + i]]
