@@ -1,0 +1,177 @@
+# Offline golden conformance and defensive security audit for OnlyBlocks.
+#
+# Everything here runs on loopback against conformance/mock_old_faithful.py.
+# No job talks to files.old-faithful.net; the live mainnet probes stay a
+# manual `make live` / `make bench`.
+#
+# Most launchers target macOS on Apple Silicon (system Ruby and Perl,
+# hand-written AArch64 assembly, Homebrew paths), so implementations run on
+# an arm64 macOS runner, one matrix job each. Each job installs only the
+# toolchain its build.sh and run.sh name.
+#
+# experimental: true marks entries whose CI toolchain differs from the one
+# the repository was benchmarked with (a newer Homebrew compiler, the runner's
+# Xcode Swift, a Homebrew bash with loadables). They report but do not fail
+# the workflow.
+#
+# Not in CI: zig, whose build.sh provisions the compiler with
+# `nix shell nixpkgs#zig --offline` only.
+
+name: conformance
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: conformance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  harness:
+    name: harness self-test
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Compile the harness
+        run: python3 -m py_compile conformance/*.py
+      - name: Self-test the runner and mock origin
+        run: python3 conformance/runner.py --self-test
+
+  implementation:
+    name: ${{ matrix.impl }}
+    needs: harness
+    runs-on: macos-15
+    timeout-minutes: 30
+    continue-on-error: ${{ matrix.experimental }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Xcode clang and the macOS SDK's libcurl.
+          - {impl: arm64-asm, experimental: false}
+          - {impl: c, experimental: false}
+          - {impl: cpp, experimental: false}
+          # The runner's rustup toolchain; Cargo.toml has no dependencies.
+          - {impl: rust, experimental: false}
+          # Official setup actions, pinned to the benchmarked versions.
+          - {impl: go, experimental: false}
+          - {impl: python, experimental: false}
+          - {impl: javascript-node, experimental: false}
+          - {impl: typescript-deno, experimental: false}
+          - {impl: bun, experimental: false}
+          - {impl: java, experimental: false}
+          - {impl: csharp, experimental: false}
+          # macOS system interpreters (/usr/bin/perl, /usr/bin/ruby 2.6).
+          - {impl: perl, experimental: false}
+          - {impl: ruby, experimental: false}
+          # Homebrew formulae at the major versions the READMEs name.
+          - {impl: tcl, experimental: false}
+          - {impl: php, experimental: false}
+          - {impl: erlang, experimental: false}
+          - {impl: ocaml, experimental: false}
+          # Toolchain differs from the benchmarked one.
+          - {impl: kotlin, experimental: true}
+          - {impl: elixir, experimental: true}
+          - {impl: fortran, experimental: true}
+          - {impl: haskell, experimental: true}
+          - {impl: swift, experimental: true}
+          - {impl: bash-awk, experimental: true}
+    steps:
+      - uses: actions/checkout@v5
+
+      # The harness itself, and impls/python/run.sh's `python3.11`.
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - if: matrix.impl == 'go'
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.25.x"
+          cache: false
+
+      - if: matrix.impl == 'javascript-node'
+        uses: actions/setup-node@v6
+        with:
+          node-version: "25"
+
+      - if: matrix.impl == 'typescript-deno'
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: "2.6.3"
+
+      - if: matrix.impl == 'bun'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.0"
+
+      - if: matrix.impl == 'java' || matrix.impl == 'kotlin'
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - if: matrix.impl == 'csharp'
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Install the Homebrew toolchain
+        if: contains(fromJSON('["tcl","php","erlang","ocaml","kotlin","elixir","fortran","haskell","bash-awk"]'), matrix.impl)
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_INSTALL_CLEANUP: "1"
+        run: |
+          case "${{ matrix.impl }}" in
+            tcl)      brew install tcl-tk ;;
+            php)      brew install php ;;
+            erlang)   brew install erlang@26
+                      echo "$(brew --prefix erlang@26)/bin" >> "$GITHUB_PATH" ;;
+            ocaml)    brew install ocaml ;;
+            kotlin)   brew install kotlin ;;
+            elixir)   brew install elixir ;;
+            fortran)  brew install gcc ;;
+            haskell)  brew install ghc ;;
+            bash-awk) brew install bash ;;
+          esac
+
+      - name: Show the toolchain
+        run: |
+          uname -a
+          python3.11 --version
+          case "${{ matrix.impl }}" in
+            arm64-asm|c|cpp) clang --version ;;
+            rust)            cargo --version ;;
+            go)              go version ;;
+            javascript-node) node --version ;;
+            typescript-deno) deno --version ;;
+            bun)             bun --version ;;
+            java|kotlin)     java -version 2>&1 ;;
+            csharp)          dotnet --list-sdks ;;
+            perl)            /usr/bin/perl -v | sed -n 2p ;;
+            ruby)            /usr/bin/ruby --version ;;
+            tcl)             echo 'puts [info patchlevel]' | /opt/homebrew/bin/tclsh ;;
+            php)             php --version ;;
+            erlang|elixir)   erl -noshell -eval 'io:format("OTP ~s~n",[erlang:system_info(otp_release)]),halt().' ;;
+            ocaml)           ocamlopt -version ;;
+            fortran)         /opt/homebrew/bin/gfortran --version ;;
+            haskell)         ghc --version ;;
+            swift)           /usr/bin/swiftc --version ;;
+            bash-awk)        /opt/homebrew/bin/bash --version | head -n 1; awk --version ;;
+          esac
+
+      - name: Golden conformance (offline)
+        run: python3 conformance/runner.py --impl "${{ matrix.impl }}"
+
+      - name: Defensive security audit (loopback)
+        run: python3 conformance/security_audit.py --impl "${{ matrix.impl }}" --skip-build
