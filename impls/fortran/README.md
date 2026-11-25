@@ -94,24 +94,17 @@ python3 ../../conformance/runner.py --impl fortran
 ## Verification
 
 * `runner.py --impl fortran` passes, including with `--strict-parsed`,
-  `--bench` and `--live`. It also passes with a `-fcheck=all` build
-  (`OB_DEBUG=1 bash build.sh`).
-* The zstd decoder matches `zstd -d` byte for byte on 214 frames made by the
-  CLI (`tests/zstd_corpus.f90`). These cover levels `--fast=5` through
-  `--ultra -22`, `--long=27`, checksums, no content size, 4 KiB blocks,
-  strategies 1 and 9, low-symbol alphabets (direct 4-bit Huffman weights) and
-  concatenated frames. Two hand-built frames also match: one with RLE literals
-  and one with more than 32 512 sequences in a block, checked against both
-  `zstd -d` and the spec's Python. gcov shows every non-error branch of
-  `ob_zstd` executing, except a 2-byte all-zero dictionary-ID field. The
-  section 9 self-test vectors cover skippable frames. `tests/zstd_fuzz.f90`
-  corrupted 2 700 frames under `-fcheck=all` with no crash.
-* An origin that corrupts every CAR slice it serves drove 3 000 `getBlock`
-  calls against the bounds-checked build. Every reply was an HTTP 200
-  JSON-RPC response, the server stayed up, and it exited 0 on SIGTERM.
-* On live mainnet data (slots `302400001`, `43200000` and `302400000`, in
-  every encoding and detail mode), the parsed JSON is identical to
-  `impls/javascript-node`.
+  `--bench` and `--live`. It also passes with a bounds-checked
+  `OB_DEBUG=1 bash build.sh` build (`-fcheck=all`).
+* `bash build.sh --test` runs the hash check values, the Base58/Base64
+  vectors and the six `ZSTD_MINI_SPEC.md` section 9 frames.
+  `tests/zstd_corpus.f90` (`<frame> <expected>` pairs) and
+  `tests/zstd_fuzz.f90` (mutation fuzzing) are drivers for frames you generate
+  with the `zstd` CLI. The decoder matched `zstd -d` on every frame tried,
+  from `--fast` to `--ultra -22 --long=27`.
+* On live mainnet data (slots `302400001`, `43200000` and the 167 MB
+  epoch-boundary `302400000`, in every encoding and detail mode), the parsed
+  JSON is identical to `impls/javascript-node`.
 
 ## Limits
 
