@@ -369,7 +369,7 @@ Given requested slot `S` and its CAR slice:
       (§9). The result is one of:
       * a metadata value → `Complete(tx, meta)`;
       * *none* (empty frame) and a **legacy** message → `MissingMetadata(tx)`;
-      * *none* and a **v0** message → `Complete(tx, default_meta)` (§12).
+      * *none* and a **versioned** (`v0` or `v1`) message → `Complete(tx, default_meta)` (§12).
    3. If metadata is not wanted (`"signatures"`), the metadata DataFrame is
       not touched at all. Its bytes may be corrupt without causing an error.
 5. **Rewards** (only when `rewards: true`). If `block.rewards` is *none*, or its
@@ -400,17 +400,27 @@ Examples: `00`=0, `7f`=127, `80 01`=128, `ff 7f`=16383, `80 80 01`=16384,
 
 ### 8.2 Layout
 
-```
-VersionedTransaction:
-  compact-u16 num_signatures, then num_signatures × 64-byte signatures
-  message
+Peek the first byte `b0` of `tx_bytes` (empty input → Error):
 
-message (first byte p):
-  if p & 0x80 == 0:  LEGACY message, and p itself is num_required_signatures
-  else: version = p & 0x7F
-        version 0  -> v0 message follows (p consumed)
-        version 127 -> Error ("off-chain messages are not accepted")
-        other      -> Error (unsupported version)
+* **`b0 < 0x80` (`(b0 & 0x80) == 0`) — Legacy or `v0` transaction:**
+  Signatures sit at the **head** (`b0` is a canonical 1-byte `compact-u16`
+  signature count in `0..127`), followed by a `legacy` or `v0` message.
+* **`b0 == 0x81` (`129`) — `v1` transaction (SIMD-0385, activated epoch 1035):**
+  `b0` is the version discriminator (`1`). There are no `compact-u16` fields, no
+  address lookup tables, instruction headers are separated from instruction
+  payloads, and `num_required_signatures` 64-byte signatures sit at the **tail**
+  with no length prefix. Transactions may be up to 4 096 bytes (larger slices in
+  synthetic archives are also parsed without artificial 1 232-byte caps).
+* **Any other `b0` (`0x80`, `0x82..0xFF`) → Error** (`-32603`, invalid
+  transaction discriminator).
+
+```
+Legacy / v0 VersionedTransaction (b0 < 0x80):
+  compact-u16 num_signatures (= b0), then num_signatures × 64-byte signatures
+  message (first byte p):
+    if p & 0x80 == 0:  LEGACY message, and p itself is num_required_signatures
+    elif p == 0x80:    v0 message follows (p consumed)
+    else:              Error (unsupported message version)
 
 legacy message:
   u8  num_required_signatures (= p)
@@ -436,20 +446,62 @@ MessageAddressTableLookup:
   32-byte account_key (the lookup table address)
   compact-u16 w, w × u8 writable_indexes
   compact-u16 r, r × u8 readonly_indexes
+
+v1 VersionedTransaction (first byte 0x81):
+  u8     version_byte == 0x81
+  u8     num_required_signatures
+  u8     num_readonly_signed_accounts
+  u8     num_readonly_unsigned_accounts
+  u32 LE config_mask                  (TransactionConfigMask, see below)
+  32B    lifetime_specifier           (reported in JSON as recentBlockhash)
+  u8     num_instructions
+  u8     num_addresses
+  num_addresses × 32B                 static account_keys
+  config_values                       (variable: 0, 4, 8, 12, 16 or 20 bytes)
+  num_instructions × InstructionHeader:
+    u8     program_id_index
+    u8     num_accounts
+    u16 LE data_len
+  for i in 0..num_instructions (InstructionPayloads, in header order):
+    num_accounts[i] × u8              instruction i account indexes
+    data_len[i] × u8                  instruction i data
+  num_required_signatures × 64B       signatures (at the tail, no length prefix)
 ```
 
-* Trailing bytes after the transaction are **ignored** (the reference uses
-  bincode's default "allow trailing bytes").
-* No sanitization is performed (signature counts, index bounds), *except*
-  where an index is dereferenced during JSON encoding (§13).
-* The "version" of a transaction is `"legacy"` or the number `0`.
+**`TransactionConfigMask` (`u32 LE`) and `config_values` (`v1` only):**
+
+* Known mask bits are `0x0000_001F` (bits `0..=4`):
+  * **bits `0..=1` (`0x03`)**: `priorityFee` (`u64 LE`, 8 bytes). **Both** bits
+    must be set together (`0x03`) or neither (`0x00`). If `(config_mask & 0x03)`
+    is `1` or `2`, fail with **Error** (`-32603`).
+  * **bit `2` (`0x04`)**: `computeUnitLimit` (`u32 LE`, 4 bytes).
+  * **bit `3` (`0x08`)**: `loadedAccountsDataSizeLimit` (`u32 LE`, 4 bytes).
+  * **bit `4` (`0x10`)**: `heapSize` (`u32 LE`, 4 bytes).
+* If any unknown bit is set (`(config_mask & ~0x1F) != 0`), fail with **Error**
+  (`-32603`).
+* Read present values from `config_values` strictly in ascending bit order
+  (`priorityFee`, then `computeUnitLimit`, then `loadedAccountsDataSizeLimit`,
+  then `heapSize`). Unset fields take `null` in `transactionConfig`.
+
+General transaction decoding rules:
+
+* Trailing bytes after the transaction are **ignored** (matching bincode/wincode
+  stream reads).
+* No sanitization is performed (`heap_size` alignment, signature counts,
+  duplicate keys, index bounds), *except* the `config_mask` validity check above
+  and where an account index is dereferenced during `jsonParsed` encoding
+  (§13.5).
+* The "version" of a transaction is `"legacy"`, the number `0`, or the number
+  `1`.
 
 ### 8.3 Raw bytes for `base64` / `base58`
 
 The reference re-serializes the decoded transaction. Because every length is
-canonical (§8.1), that is exactly **the prefix of `tx_bytes` consumed by the
-parser**, without any trailing bytes. Encode that prefix with Base64 (§15.2) or
-Base58 (§15.1).
+canonical (§8.1, §8.2), that is exactly **the prefix of `tx_bytes` consumed by
+the parser** (for `v1`, from `0x81` through the last byte of the trailing
+`Signatures`), without any trailing bytes. Encode that prefix with Base64
+(§15.2) or Base58 (§15.1; note `SPEC.md` §5.4 rejects `encoding: "base58"`
+upfront with `-32602` whenever `maxSupportedTransactionVersion >= 1`).
 
 ---
 
@@ -827,7 +879,8 @@ Reward { pubkey: string, lamports: i64, post_balance: u64,
          reward_type: Fee|Rent|Staking|Voting?, commission: u8? }
 ```
 
-`default_meta` (used for a v0 transaction whose metadata frame is empty):
+`default_meta` (used for a versioned `v0` or `v1` transaction whose metadata
+frame is empty):
 status `Ok`, fee `0`, empty balances, every optional *none*, and
 `loaded_addresses` empty.
 
@@ -863,11 +916,16 @@ For every `Complete` transaction in `"full"` or `"accounts"` mode, with
 | `max` | tx version | Result |
 |---|---|---|
 | *none* | legacy | OK, `version` key **omitted** |
-| *none* | `0` | **whole request fails with `-32015`** |
+| *none* | `0` or `1` | **whole request fails with `-32015`** |
 | `n` | legacy | OK, `"version": "legacy"` |
 | `n` | `0` | OK, `"version": 0` (always, since `0 <= n`) |
+| `0` | `1` | **whole request fails with `-32015`** |
+| `n >= 1` | `1` | OK, `"version": 1` |
 
 `MissingMetadata` transactions are never gated and never carry `version`.
+In `"signatures"` and `"none"` modes, `maxSupportedTransactionVersion` does not
+gate versioned transactions (`"signatures"` returns `signatures[0]` of every
+transaction, including `v1` tail signatures).
 
 Each element of `transactions` is:
 
@@ -890,15 +948,25 @@ Each element of `transactions` is:
     "instructions": [
       {"programIdIndex": 2, "accounts": [0, 1], "data": "<b58 of data>", "stackHeight": 1}
     ],
-    "addressTableLookups": [                     // v0 ONLY (may be []); omitted for legacy
+    "addressTableLookups": [                     // v0 ONLY (may be []); omitted for legacy and v1
       {"accountKey": "<b58>", "writableIndexes": [4], "readonlyIndexes": [9]}
-    ]
+    ],
+    "transactionConfig": {                       // v1 ONLY; omitted for legacy and v0
+      "priorityFee": 125000,                     // u64 or null (all 4 keys ALWAYS present on v1)
+      "computeUnitLimit": 400000,                // u32 or null
+      "loadedAccountsDataSizeLimit": 65536,      // u32 or null
+      "heapSize": null                           // u32 or null
+    }
   }
 }
 ```
 
 Top-level instructions always have **`"stackHeight": 1`** (the reference's
-`TRANSACTION_LEVEL_STACK_HEIGHT`).
+`TRANSACTION_LEVEL_STACK_HEIGHT`). On `v1` messages, `transactionConfig` is
+**always** emitted with all four camelCase keys (`priorityFee`,
+`computeUnitLimit`, `loadedAccountsDataSizeLimit`, `heapSize`), using `null` for
+any field whose bit(s) were unset in `config_mask`, and `addressTableLookups` is
+**omitted**.
 
 ### 13.4 `encoding: "json"`, `transactionDetails: "accounts"`
 
@@ -912,10 +980,12 @@ Top-level instructions always have **`"stackHeight": 1`** (the reference's
 }
 ```
 
-For legacy, the list is the static keys. For v0 it is the static keys, then
-`loaded_addresses.writable`, then `loaded_addresses.readonly`, with
-`source: "lookupTable"` for the loaded ones. `signer` and `writable` are
-defined in §14. The `meta` is the reduced form (§13.8).
+For `legacy` and `v1` (neither of which has address lookup tables), the list is
+only the static keys (`source: "transaction"`), ignoring `loaded_addresses`. For
+`v0` it is the static keys, then `loaded_addresses.writable`, then
+`loaded_addresses.readonly`, with `source: "lookupTable"` for the loaded ones.
+`signer` and `writable` are defined in §14. The `meta` is the reduced form
+(§13.8).
 
 ### 13.5 `encoding: "jsonParsed"`, `transactionDetails: "full"`
 
@@ -928,7 +998,8 @@ defined in §14. The `meta` is the reduced form (§13.8).
     "instructions": [
       {"programId": "<b58>", "accounts": ["<b58>", ...], "data": "<b58>", "stackHeight": 1}
     ],
-    "addressTableLookups": [...]        // v0 ONLY; omitted for legacy
+    "addressTableLookups": [...],       // v0 ONLY; omitted for legacy and v1
+    "transactionConfig": {...}          // v1 ONLY (same 4-key object as §13.3); omitted for legacy and v0
   }
 }
 ```
@@ -940,8 +1011,9 @@ and inner, is emitted in this **partially decoded** form:
 * `accounts = [keys[i] for i in accounts]`;
 * `data = base58(data)`.
 
-`keys` is the static keys, plus (v0 with metadata) `loaded.writable`, plus
-`loaded.readonly`. An index out of range is an Error. The Rust reference
+`keys` is the static keys (`legacy` and `v1`), or static keys plus `v0`
+`loaded.writable` plus `loaded.readonly` (`v0` with metadata). An index out of
+range is an Error. The Rust reference
 additionally parses instructions of well-known programs (System, Vote, Stake,
 SPL Token / Token-2022, Associated Token Account, Memo, BPF loaders, Address
 Lookup Table) into `{"program", "programId", "parsed", "stackHeight"}`.
@@ -1025,7 +1097,7 @@ demoted(i) = (i <= 255 and some top-level instruction has program_id_index == i)
 writable(i) = writable_index(i) and keys[i] not in RESERVED and not demoted(i)
 ```
 
-(For a legacy message, `W = 0` and there are no `i >= S`.)
+(For `legacy` and `v1` messages, `W = 0` and there are no `i >= S`.)
 
 `RESERVED` is the full list below (Agave's reserved keys with every feature
 activated). These keys are **never** `writable`, whatever the header says:

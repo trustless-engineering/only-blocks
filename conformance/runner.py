@@ -36,17 +36,27 @@ LIVE_BLOCKS = {
         "blockhash": "KPY8YHhZTuKXuA5ncyMrhWmLwfEq6ZmLzwYxF1VKneo",
         "previousBlockhash": "HTCes91cfwRratW4babPCUqe54N8LqCmx7UMC8fsBmuQ",
         "parentSlot": 302400000, "blockTime": 1732048881, "blockHeight": 280880470,
-        "transactions": 140, "fees": 366242266, "v0": 104, "failed": 20,
+        "transactions": 140, "fees": 366242266, "v0": 104, "v1": 0, "failed": 20, "max_version": 0,
         "first_signature": "WgbVjEpMi9EmtdZ6FYnZc494gd4BqRmZ6A2WPSznJm3Po4EYgfJtLJKe1Xqo1K9fQpCn4tGHNpdfS3h84Qs4c4x",
         "last_signature": "3eNJT3xUQBh8AuZALx5fQ5rETkzVM4v1mNgDg4Whqng1nnjR8xqyzUWSkzewCD89gwyQAXQrTMa4gxob7Agco2gE",
         "rewards": [{"pubkey": "6Rk694kh1QTyQkirdb1uDZmS5xqG9bNaYtxx8d311Mr7", "lamports": 183121133,
                      "postBalance": 2305000118, "rewardType": "Fee", "commission": None}],
     },
+    473045001: {
+        "blockhash": "3r2w52ntAoJBr1DbZMnsEC4NSE5gS5RaC9aadgi4TXfG",
+        "previousBlockhash": "6vkKw3ZzW9ToG8TgzEw2KonfnUHPUX3KsKnxwGyYb2GN",
+        "parentSlot": 473045000, "blockTime": 1795458920, "blockHeight": 451058313,
+        "transactions": 448, "fees": 26654461, "v0": 79, "v1": 255, "failed": 178, "max_version": 1,
+        "first_signature": "ZEhEtxNRMFSFB3KHFMktA8vZh3g67V51GrYQeGuuhxso3u8BaDtRcca9ahF7hDrf3YmmqeWzRQZa2mv7oWBXP18",
+        "last_signature": "2WsJzqs6GjTHBk42iDcJNdeKwrtbSP3aUeDQzba2FDeTimqcyjheLG7FKuvtszqx8PaBZPA9oFRXP1vfJyZicPG8",
+        "rewards": [{"pubkey": "7jtWrBuj9k2E5RnoHGWSBosBwqwjZMvEnhe9qGLJdhT4", "lamports": 25394461,
+                     "postBalance": 34347498783, "rewardType": "Fee", "commission": None}],
+    },
     43200000: {
         "blockhash": "HVHEgGRbukDHtRysZFfbfy4ssdWKW1gDY6gsngCycrvf",
         "previousBlockhash": "47PrqQ4MJrT4G2GB7uHk5CdZadTKspB5HgDszzxHPJc2",
         "parentSlot": 43199999, "blockTime": 1603254141, "blockHeight": None,
-        "transactions": 208, "fees": 1045000, "v0": 0, "failed": 3,
+        "transactions": 208, "fees": 1045000, "v0": 0, "v1": 0, "failed": 3, "max_version": 0,
         "first_signature": "qsvdGz5heK2eaZY8tq9tTv2RXn1Gpi5mjUru2gRSAumNEzR3muLA3bRscohAKuGW3q6SEfzsTiRDaBeGSgJuwcx",
         "last_signature": "gwsLfSNsgqbQwaSLUH9zSmKDYJJ1BrmkqUytjvRJ4oJwiB9navBEFzjw24r4WvWzUa9LSyJNkrNrPwVwF6svVzg",
         "rewards": [],
@@ -573,7 +583,14 @@ def live_block(bind, slot, config):
 def live_slot(bind, slot, encodings):
     """Compare one immutable mainnet block with pinned facts, and its encodings with each other."""
     expected = LIVE_BLOCKS[slot]
-    config = {"encoding": "json", "maxSupportedTransactionVersion": 0}
+    max_version = expected.get("max_version", 0)
+    if expected["v1"] > 0:
+        time.sleep(1)
+        validate(error_expected(-32015), rpc(
+            bind, request("getBlock", [slot, {"encoding": "json", "maxSupportedTransactionVersion": 0}]),
+            LIVE_TIMEOUT,
+        ), True)
+    config = {"encoding": "json", "maxSupportedTransactionVersion": max_version}
     block = live_block(bind, slot, config)
     transactions = block.get("transactions")
     if not isinstance(transactions, list) or not all(
@@ -588,13 +605,14 @@ def live_slot(bind, slot, encodings):
         "transactions": len(transactions),
         "fees": sum(meta["fee"] for meta in metas if type(meta.get("fee")) is int),
         "v0": sum(type(tx.get("version")) is int and tx["version"] == 0 for tx in transactions),
+        "v1": sum(type(tx.get("version")) is int and tx["version"] == 1 for tx in transactions),
         "failed": sum(meta.get("err") is not None for meta in metas),
         "first_signature": signatures[0] if signatures else None,
         "last_signature": signatures[-1] if signatures else None,
     }
     for name, value in facts.items():
         compare(expected[name], value, f"$.transactions ({name})")
-    compare(signatures, live_block(bind, slot, dict(config, transactionDetails="signatures")).get(
+    compare(signatures, live_block(bind, slot, {"transactionDetails": "signatures"}).get(
         "signatures", MISSING), "$.signatures")
     wire = {}
     for encoding in encodings:
@@ -612,8 +630,14 @@ def live_slot(bind, slot, encodings):
                 raw = base64.b64decode(pair[0], validate=True) if encoding == "base64" else base58_decode(pair[0])
             except ValueError as error:
                 raise CheckFailed(f"{path}.transaction: {error}") from error
-            # One-byte compact-u16 signature count, then the 64-byte signatures.
-            if raw[1:65] != base58_decode(signatures[index]):
+            if raw and raw[0] == 0x81:
+                num_sigs = raw[1] if len(raw) >= 2 else 0
+                sig_start = len(raw) - 64 * num_sigs
+                first_sig = raw[sig_start:sig_start + 64] if num_sigs > 0 and sig_start >= 42 else b""
+            else:
+                # One-byte compact-u16 signature count, then the 64-byte signatures.
+                first_sig = raw[1:65]
+            if first_sig != base58_decode(signatures[index]):
                 raise CheckFailed(f"{path}.transaction: first signature differs from the json encoding")
             wire[encoding].append(raw)
             compare(reference["meta"], tx.get("meta", MISSING), path + ".meta", True)
@@ -624,7 +648,12 @@ def live_slot(bind, slot, encodings):
 
 def live_probe(implementation):
     with running_server(implementation, LIVE_URL) as (bind, tmpdir, _):
-        for slot, encodings in ((302400001, ("base64", "base58")), (302400004, ()), (43200000, ("base64",))):
+        for slot, encodings in (
+            (302400001, ("base64", "base58")),
+            (473045001, ("base64",)),
+            (302400004, ()),
+            (43200000, ("base64",)),
+        ):
             try:
                 if slot == 302400004:
                     time.sleep(1)

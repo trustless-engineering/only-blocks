@@ -153,11 +153,9 @@ jobs:
       - name: Keep Homebrew from shadowing the pinned toolchain
         if: contains(fromJSON('["go","javascript-node","typescript-deno","bun"]'), matrix.impl)
         run: |
-          for formula in go node deno bun; do
-            if brew list --formula "$formula" >/dev/null 2>&1; then
-              brew unlink "$formula"
-            fi
-          done
+          while IFS= read -r formula; do
+            [ -n "$formula" ] && brew unlink "$formula"
+          done < <(brew list --formula | grep -E '^(go|node|deno|bun)(@|$)' || true)
 
       - name: Check the toolchain the harness will run
         run: |

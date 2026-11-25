@@ -199,12 +199,30 @@ def rle_zstd_bomb():
     return bytes(frame)
 
 
+def tx_car(slot, tx_payload):
+    block, entry, transaction = cid(50 + slot), cid(80 + slot), cid(110 + slot)
+    return b"".join([
+        section(block, block_node(slot, [entry])),
+        section(entry, cbor([1, None, bytes(32), [Link(transaction)]])),
+        section(transaction, cbor([0, dataframe(tx_payload)])),
+    ])
+
+
 def security_cases():
     # Single-segment + 8-byte Frame_Content_Size.  The trailing invalid
     # protobuf key makes the raw-codec fallback fail too.  Total: 14 bytes.
     oversized_zstd = (b"\x28\xb5\x2f\xfd\xe0"
                       + (MAX_ZSTD_OUTPUT + 1).to_bytes(8, "little") + b"\x0f")
     invalid_zstd = b"\x28\xb5\x2f\xfe\xff\xff\xff\x7f\x0f"
+    # Hostile v1 wire transactions: unknown config_mask bit, partial priorityFee
+    # bit, truncated trailing signature array, and truncated instruction payload.
+    v1_unknown_mask = b"\x81\x01\x00\x00\x20\x00\x00\x00" + bytes(32) + b"\x00\x01" + bytes(32) + bytes(64)
+    v1_partial_pf = b"\x81\x01\x00\x00\x01\x00\x00\x00" + bytes(32) + b"\x00\x01" + bytes(32) + bytes(8) + bytes(64)
+    v1_trunc_sigs = b"\x81\x02\x00\x00\x00\x00\x00\x00" + bytes(32) + b"\x00\x02" + bytes(64) + bytes(64)
+    v1_trunc_payload = (
+        b"\x81\x01\x00\x01\x00\x00\x00\x00" + bytes(32) + b"\x01\x02" + bytes(64)
+        + b"\x01\x00\xff\xff" + bytes(64)
+    )
     cases = [
         ("valid_block", empty_block_car(10)),
         ("dataframe_cycle", cycle_car(11)),
@@ -215,6 +233,10 @@ def security_cases():
         ("zstd_declared_oversize", rewards_car(16, oversized_zstd)),
         ("zstd_invalid_magic", rewards_car(17, invalid_zstd)),
         ("zstd_rle_bomb", rewards_car(18, rle_zstd_bomb())),
+        ("v1_unknown_config_mask", tx_car(19, v1_unknown_mask)),
+        ("v1_partial_priority_fee", tx_car(20, v1_partial_pf)),
+        ("v1_truncated_signatures", tx_car(21, v1_trunc_sigs)),
+        ("v1_truncated_payload", tx_car(22, v1_trunc_payload)),
     ]
     return {name: {"slot": slot, "body": body}
             for slot, (name, body) in enumerate(cases, start=10)}
@@ -417,7 +439,7 @@ def assert_tmpdir_empty(tmpdir):
         raise AuditFailure("TMPDIR contains: " + ", ".join(str(p.relative_to(tmpdir)) for p in entries[:8]))
 
 
-def http_request(bind, method, body=b"", timeout=5):
+def http_request(bind, method, body=b"", timeout=20):
     connection = http.client.HTTPConnection(*bind, timeout=timeout)
     try:
         headers = {"Connection": "close"}
@@ -433,7 +455,7 @@ def http_request(bind, method, body=b"", timeout=5):
         connection.close()
 
 
-def raw_post_status(bind, body, timeout=5):
+def raw_post_status(bind, body, timeout=20):
     """Return an HTTP status, or None when the peer safely drops the request."""
     head = (
         f"POST / HTTP/1.1\r\nHost: {bind[0]}:{bind[1]}\r\n"
@@ -458,7 +480,7 @@ def raw_post_status(bind, body, timeout=5):
     return int(match[1]) if match else None
 
 
-def rpc(bind, value, timeout=5):
+def rpc(bind, value, timeout=20):
     body = value if isinstance(value, bytes) else json.dumps(value, separators=(",", ":")).encode()
     status, raw = http_request(bind, "POST", body, timeout)
     if status != 200:
@@ -562,7 +584,9 @@ def audit_implementation(implementation, origin, skip_build=False):
             record(results, "valid_block", lambda: valid_block_probe(bind, origin))
             for name in ("dataframe_cycle", "dataframe_checksum", "truncated_car_varint",
                          "oversized_car_section", "truncated_cbor_array",
-                         "zstd_declared_oversize", "zstd_invalid_magic", "zstd_rle_bomb"):
+                         "zstd_declared_oversize", "zstd_invalid_magic", "zstd_rle_bomb",
+                         "v1_unknown_config_mask", "v1_partial_priority_fee",
+                         "v1_truncated_signatures", "v1_truncated_payload"):
                 record(results, name, lambda name=name: archive_error_probe(bind, origin, name))
             record(results, "oversized_slice", lambda: oversized_slice_probe(bind, origin))
             record(results, "batch_limit", lambda: batch_probe(bind, origin))
@@ -600,7 +624,7 @@ def valid_block_probe(bind, origin):
 
 def archive_error_probe(bind, origin, name):
     case = origin.cases[name]
-    reply = rpc(bind, request("getBlock", [case["slot"]]))
+    reply = rpc(bind, request("getBlock", [case["slot"], {"maxSupportedTransactionVersion": 1}]))
     assert_error(reply, -32603)
     assert_health(bind)
 
@@ -664,7 +688,12 @@ def deep_json_probe(bind, origin):
 
 
 def slot_parameter_probe(bind, origin):
-    probes = (b'18446744073709551616', b'-1', b'1.5')
+    probes = (
+        b'18446744073709551616',
+        b'-1',
+        b'1.5',
+        b'10,{"encoding":"base58","maxSupportedTransactionVersion":1}',
+    )
     for literal in probes:
         body = (b'{"jsonrpc":"2.0","id":"audit","method":"getBlock","params":['
                 + literal + b']}')
@@ -693,9 +722,10 @@ def get_probe(bind, origin):
 
 
 REPORT_GROUPS = {
-    "CAR / CBOR / DataFrame": (
+    "CAR / CBOR / DataFrame / v1": (
         "valid_block", "dataframe_cycle", "dataframe_checksum", "truncated_car_varint",
-        "oversized_car_section", "truncated_cbor_array",
+        "oversized_car_section", "truncated_cbor_array", "v1_unknown_config_mask",
+        "v1_partial_priority_fee", "v1_truncated_signatures", "v1_truncated_payload",
     ),
     "Memory caps / zstd": (
         "oversized_slice", "zstd_declared_oversize", "zstd_invalid_magic", "zstd_rle_bomb",

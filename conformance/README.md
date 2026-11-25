@@ -54,18 +54,20 @@ selected implementation passes and 1 when any check fails.
 
 `--live` additionally runs sequential probes against
 `https://files.old-faithful.net` with a one-second pause before each block
-request and a 120-second timeout per request. It checks the modern v0 slot
-302400001, skipped slot 302400004 (`-32007`), pre-157 bincode slot 43200000,
-and the removed RPC method. Mainnet history is immutable, so both blocks are
-compared with facts pinned in `LIVE_BLOCKS`: `blockhash`,
+request and a 120-second timeout per request. It checks the epoch-700 `v0` slot
+302400001, the epoch-1095 `v1` slot 473045001 (including its `-32015` gate at
+`maxSupportedTransactionVersion: 0`), skipped slot 302400004 (`-32007`),
+pre-157 bincode slot 43200000, and the removed RPC method. Mainnet history is
+immutable, so all three blocks are compared with facts pinned in `LIVE_BLOCKS`:
+`blockhash`,
 `previousBlockhash`, `parentSlot`, `blockTime`, `blockHeight`, the block
-`rewards`, the transaction count, the fee total, the number of v0 and failed
-transactions, and the first and last signatures. The `signatures` detail
-level must list the same first signatures as `json`, and the `base64` and
-`base58` encodings must carry the same metadata, the same versions and wire
-bytes that start with those signatures (and equal each other). The Rust and
-Node.js implementations and a public mainnet RPC node agree on every pinned
-value. Omitting `--live` keeps the harness on loopback.
+`rewards`, the transaction count, the fee total, the number of `v0`, `v1` and
+failed transactions, and the first and last signatures. The `signatures` detail
+level must list the same first signatures as `json`, and the binary encodings
+(`base64`, plus `base58` on `maxSupportedTransactionVersion: 0` blocks) must
+carry the same metadata, the same versions and wire bytes whose signatures
+match `json` (at the head for `legacy`/`v0` and at the tail for `v1`). Omitting
+`--live` keeps the harness on loopback.
 
 ## Benchmark output
 

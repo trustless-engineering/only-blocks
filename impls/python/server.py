@@ -86,9 +86,11 @@ def instruction_json(ix, keys):
 
 def transaction_json(tx, meta, encoding, details, include_rewards, max_version):
     version, signatures, message, raw = tx
-    if version == 0:
-        if max_version is None:
-            raise RpcError(-32015, 'Transaction version (0) requires "maxSupportedTransactionVersion": 0')
+    if isinstance(version, int):
+        if max_version is None or version > max_version:
+            raise RpcError(-32015, f'Transaction version ({version}) is not supported by the requesting client. '
+                                   f'Please try the request again with the following configuration parameter: '
+                                   f'"maxSupportedTransactionVersion": {version}')
         if meta is None:
             meta = empty_meta()
 
@@ -364,14 +366,15 @@ def block_params(params):
     details = option('transactionDetails', 'full')
     include_rewards = option('rewards', True)
     max_version = config.get('maxSupportedTransactionVersion')
+    parsed_max_version = None if max_version is None else uint_parameter(max_version, 255)
     if (encoding not in ('json', 'jsonParsed', 'base64', 'base58')
             or details not in ('full', 'accounts', 'signatures', 'none')
             or (details == 'accounts' and encoding != 'json')
+            or (encoding == 'base58' and parsed_max_version is not None and parsed_max_version >= 1)
             or type(include_rewards) is not bool
             or config.get('commitment') not in (None, 'finalized', 'confirmed')):
         raise invalid
-    return slot, encoding, details, include_rewards, (
-        None if max_version is None else uint_parameter(max_version, 255))
+    return slot, encoding, details, include_rewards, parsed_max_version
 
 
 def response(request_id, **value):

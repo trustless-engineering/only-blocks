@@ -136,15 +136,16 @@ def live(implementation):
     checks = {}
     try:
         with runner.running_server(implementation, runner.LIVE_URL) as (bind, _, _):
-            for slot in (302400001, 302400004, 43200000, None):
+            for slot in (302400001, 473045001, 302400004, 43200000, None):
                 label = str(slot) if slot is not None else "getTransaction"
                 try:
                     if slot is None:
                         request = runner.removed_transaction(302400001)
                     else:
                         time.sleep(LIVE_RPC_PAUSE)
+                        max_ver = runner.LIVE_BLOCKS.get(slot, {}).get("max_version", 0)
                         request = runner.request("getBlock", [
-                            slot, {"encoding": "json", "maxSupportedTransactionVersion": 0},
+                            slot, {"encoding": "json", "maxSupportedTransactionVersion": max_ver},
                         ])
                     response = runner.rpc(bind, request, runner.LIVE_TIMEOUT)
                     if slot is None or slot == 302400004:
@@ -161,13 +162,13 @@ def live(implementation):
                         break
     except (OSError, runner.CheckFailed) as error:
         return {"status": "failed", "checks": checks, "error": str(error)}
-    passed = len(checks) == 4 and all(check["status"] == "passed" for check in checks.values())
+    passed = len(checks) == 5 and all(check["status"] == "passed" for check in checks.values())
     return {"status": "passed" if passed else "failed", "checks": checks}
 
 
 def parity(rows):
     slots = {}
-    for slot in ("302400001", "43200000"):
+    for slot in ("302400001", "473045001", "43200000"):
         matching = {}
         missing = []
         for row in rows:

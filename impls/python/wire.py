@@ -320,6 +320,35 @@ def instruction(reader, height=None):
 
 def transaction(data):
     reader = Reader(data)
+    require(reader.left > 0, 'Empty transaction')
+    first = reader.data[0]
+    if first == 0x81:
+        reader.u8()
+        header = dict(numRequiredSignatures=reader.u8(),
+                      numReadonlySignedAccounts=reader.u8(),
+                      numReadonlyUnsignedAccounts=reader.u8())
+        mask = reader.u32()
+        require((mask & ~0x1f) == 0 and (mask & 3) in (0, 3), 'Invalid v1 transaction config mask')
+        recent = pubkey(reader.take(32))
+        num_ix, num_keys = reader.u8(), reader.u8()
+        keys = reader.items(num_keys, lambda: pubkey(reader.take(32)), 32)
+        config = dict(
+            priorityFee=reader.u64() if (mask & 3) == 3 else None,
+            computeUnitLimit=reader.u32() if mask & 4 else None,
+            loadedAccountsDataSizeLimit=reader.u32() if mask & 8 else None,
+            heapSize=reader.u32() if mask & 16 else None,
+        )
+        headers = reader.items(num_ix, lambda: (reader.u8(), reader.u8(), reader.fixed('<H')), 4)
+        instructions = [
+            dict(programIdIndex=prog, accounts=reader.take(n_acc),
+                 data=reader.take(d_len), stackHeight=1)
+            for prog, n_acc, d_len in headers
+        ]
+        signatures = reader.items(header['numRequiredSignatures'], lambda: reader.take(64), 64)
+        message = dict(header=header, accountKeys=keys, recentBlockhash=recent,
+                       instructions=instructions, transactionConfig=config)
+        return 1, signatures, message, reader.data[:reader.pos]
+    require(first < 0x80, 'Unsupported wire transaction discriminator')
     signatures = reader.items(reader.compact(), lambda: reader.take(64), 64)
     prefix = reader.u8()
     require(prefix <= 128, 'Unsupported wire transaction version')

@@ -328,9 +328,10 @@ MAY add a bounded RAM slice cache.
    so it answers `-32004` even with `transactionDetails:"none"`; fixture slot
    `302400009` has the skipped parent `302400008`, so it answers `-32007`.
 5. Decode transactions, metadata and rewards as `transactionDetails` /
-   `rewards` require, then serialize (`WIRE_FORMATS.md` §13). A `v0`
-   transaction without `maxSupportedTransactionVersion` is `-32015`. Any decode
-   failure is `-32603`.
+   `rewards` require, then serialize (`WIRE_FORMATS.md` §13). A versioned (`v0`
+   or `v1`) transaction when `maxSupportedTransactionVersion` is absent/null or
+   smaller than the transaction's version is `-32015`. Any decode failure is
+   `-32603`.
 
 ---
 
@@ -418,8 +419,15 @@ object, `[]`, 3+ items) is `-32602`.
 | `maxSupportedTransactionVersion` | integer `0..255` | absent (*none*) | `-32602` (negative, > 255, non-integer) |
 | `commitment` | `"finalized"`, `"confirmed"` (accepted and ignored: archive data is final) | — | `-32602` for `"processed"`, any other string, non-strings |
 
-Cross-field rule: `transactionDetails: "accounts"` is only valid with
-`encoding: "json"`. With any other encoding it is `-32602`.
+Cross-field rules:
+
+* `transactionDetails: "accounts"` is only valid with `encoding: "json"`. With
+  any other encoding it is `-32602`.
+* `encoding: "base58"` is not supported when `maxSupportedTransactionVersion >= 1`
+  (because `v1` transactions scale up to 4 096 bytes while Base58 RPC binary
+  encoding is capped at legacy packet sizes). Combining `"base58"` with
+  `maxSupportedTransactionVersion` in `1..255` MUST fail upfront with `-32602`
+  and zero network traffic.
 
 Semantics (full detail in `WIRE_FORMATS.md` §13):
 
@@ -427,12 +435,18 @@ Semantics (full detail in `WIRE_FORMATS.md` §13):
   keys are **omitted**, and rewards are not decoded at all. Per-transaction
   `meta.rewards` becomes `null` for `full`, and is omitted for `accounts`.
 * `transactionDetails: "signatures"`: `"signatures": [first signature of each
-  tx]`, and `transactions` is omitted. Metadata is not decoded.
+  tx]`, and `transactions` is omitted. Metadata is not decoded, and
+  `maxSupportedTransactionVersion` is not checked (so `v0` and `v1` first
+  signatures are returned even when `maxSupportedTransactionVersion` is absent
+  or `0`; note that for `v1` transactions, signatures sit at the **tail** of the
+  wire payload).
 * `transactionDetails: "none"`: both `transactions` and `signatures` are
   omitted. Transactions are not decoded.
-* `maxSupportedTransactionVersion` *none* plus any `v0` transaction in
-  `full`/`accounts` mode: the **whole request** fails with `-32015`. When it is
-  set, every transaction carries `"version": "legacy"` or `"version": 0`.
+* Version gate in `full`/`accounts` mode: if a transaction has numeric version
+  `v` (`0` or `1`) and `maxSupportedTransactionVersion` is *none* or `< v`, the
+  **whole request** fails with `-32015`. When `maxSupportedTransactionVersion`
+  is set and `>= v` for every transaction, each `Complete` transaction carries
+  `"version": "legacy"`, `"version": 0`, or `"version": 1`.
 
 ### 5.5 Result shape (summary)
 
@@ -463,14 +477,14 @@ Semantics (full detail in `WIRE_FORMATS.md` §13):
 | `-32603` | Internal error | upstream non-206/non-404 status, retries exhausted, transport failure, oversize slice, length mismatch, any CAR/CBOR/DataFrame/transaction/protobuf/bincode/zstd decode failure, slot mismatch, internal panics |
 | `-32004` | Block not available | HTTP `404` on either range read, for the slot or its parent (epoch not archived) |
 | `-32007` | Slot skipped | `length == 0` in `slot-ranges.raw`, for the slot or its parent |
-| `-32015` | Unsupported transaction version | `v0` transaction while `maxSupportedTransactionVersion` is absent/null (`full`/`accounts` only) |
+| `-32015` | Unsupported transaction version | versioned (`v0` or `v1`) transaction while `maxSupportedTransactionVersion` is absent/null or `< version` (`full`/`accounts` only) |
 
 Messages are free text but MUST be non-empty. Recommended (the reference's
 wording):
 
 * `-32004`: `Block not available for slot {slot}: epoch {epoch} is not archived in Old Faithful (historical-only server)`
 * `-32007`: `Slot {slot} was skipped, or missing in long-term storage`
-* `-32015`: `Transaction version (0) is not supported by the requesting client. Please try the request again with the following configuration parameter: "maxSupportedTransactionVersion": 0`
+* `-32015`: `Transaction version ({v}) is not supported by the requesting client. Please try the request again with the following configuration parameter: "maxSupportedTransactionVersion": {v}`
 * `-32601`: `Method not found: {method}`
 
 An implementation MUST turn every internal failure (bad bytes, index out of
@@ -512,18 +526,23 @@ python3 conformance/runner.py --impl c --strict-parsed --bench
 ```
 
 It starts `conformance/mock_old_faithful.py`, which is a loopback HTTP/1.1
-Range origin serving `conformance/fixtures/` (epochs 100 and 700). It then
+Range origin serving `conformance/fixtures/` (epochs 100, 700 and 1095). It then
 launches `run.sh` per §2.3 and checks:
 
 1. **Golden cases** (`conformance/fixtures/manifest.json`): `getHealth`
-   variants, `getBlock` in every encoding and `transactionDetails` mode,
-   rewards on/off, both commitments, multi-frame DataFrames, pre-157 bincode,
-   every envelope rule of §5.1 (oversize batches, non-object batch items,
-   missing and wrongly typed `id`/`method`/`jsonrpc`), every parameter rule of
-   §5.4 (non-literal, out-of-range and `2^64-1` slots, wrongly typed options,
-   null and unknown config keys), skipped/unarchived slots, skipped and
-   unarchived **parents** (§4.5), the `-32015` gate and mixed batches. Every
-   response must be HTTP `200`. Results are compared field by field:
+   variants, `getBlock` in every encoding and `transactionDetails` mode across
+   `legacy`, `v0` and `v1` (SIMD-0385) transactions (including `> 1232`-byte
+   `v1` payloads, inline `transactionConfig` bitmasks, separated instruction
+   headers/payloads, trailing signature arrays and verbatim mainnet epoch-1095
+   CAR slices), rewards on/off, both commitments, multi-frame DataFrames,
+   pre-157 bincode, every envelope rule of §5.1 (oversize batches, non-object
+   batch items, missing and wrongly typed `id`/`method`/`jsonrpc`), every
+   parameter rule of §5.4 (non-literal, out-of-range and `2^64-1` slots, wrongly
+   typed options, `base58` with `maxSupportedTransactionVersion >= 1`, null and
+   unknown config keys), skipped/unarchived slots, skipped and unarchived
+   **parents** (§4.5), the `-32015` gate for both `v0` and `v1`, corrupt `v1`
+   wire slices, and mixed batches. Every response must be HTTP `200`. Results
+   are compared field by field:
    * error cases are matched on `code` plus a non-empty `message`;
    * `uiAmount` allows a `1e-9` absolute tolerance;
    * `null` and omission are interchangeable **only** for optional metadata
@@ -545,15 +564,18 @@ launches `run.sh` per §2.3 and checks:
    (`413`, or the connection is dropped), a 1 MiB body of nested arrays must
    get `-32700` or `-32600`, and the server must still answer `getHealth`
    afterwards (§2.4, §5.1, §6).
-8. `--live` probes the real archive: slot `302400001` (modern, v0; `json`,
-   `base64`, `base58` and `signatures`), skipped slot `302400004`, legacy
-   pre-157 slot `43200000` and the removed method. Mainnet history is
+8. `--live` probes the real archive: slot `302400001` (epoch 700, `v0`; `json`,
+   `base64`, `base58` and `signatures`), epoch-1095 `v1` slot (SIMD-0385 `v1` +
+   `v0` + `legacy`; `-32015` gate at `maxSupportedTransactionVersion: 0`, then
+   `json`, `base64` and `signatures` at `maxSupportedTransactionVersion: 1`),
+   skipped slot `302400004`, legacy pre-157 slot `43200000` and the removed
+   method. Mainnet history is
    immutable, so the probe compares `blockhash`, `previousBlockhash`,
    `parentSlot`, `blockTime`, `blockHeight`, the transaction count, the fee
-   total, the number of `v0` and failed transactions, the first and last
+   total, the number of `v0`, `v1` and failed transactions, the first and last
    signatures and the block rewards against values pinned in `runner.py`, and
-   checks that the four encodings describe the same transactions. Rust, Node.js and a public mainnet
-   RPC node agree on all of them. A cold live `getBlock` is four sequential
+   checks that the binary and `json` encodings describe the same transactions.
+   A cold live `getBlock` is four sequential
    HTTPS Range reads, so each live request is given 120 s.
 
 An implementation is **conformant** when `runner.py --impl <slug>` exits `0`.
@@ -606,7 +628,7 @@ An implementation is **conformant** when `runner.py --impl <slug>` exits `0`.
 | `TransactionError` variants `0..36` | **`0..38`** (39 variants). `InstructionError` has **`0..53`** (54 variants, `25 = Custom(u32)`). See `WIRE_FORMATS.md` §11.2–11.3 |
 | CRC-64-GO-ISO with init `0`, xorout `0` | **init `0xFFFF_FFFF_FFFF_FFFF`, xorout `0xFFFF_FFFF_FFFF_FFFF`** (reflected poly `0xD800000000000000`). Go's API passes `0` only because it inverts internally. Check value `0xB90956C775A41001` |
 | "64-bit FNV-1" | the reference uses **FNV-1a** (`h = (h ^ b) * prime`). Either CRC or FNV-1a may match a DataFrame hash |
-| `maxSupportedTransactionVersion` is `0` | any integer **`0..255`** is accepted. Only version `0` exists, so any value admits `v0` |
+| `maxSupportedTransactionVersion` is `0` | any integer **`0..255`** is accepted (`0` admits `legacy` + `v0`; `1..255` admits `legacy` + `v0` + `v1`, and rejects `encoding: "base58"` with `-32602`) |
 | `rewards:false` omits `rewards` | at **block** level, yes (together with `numRewardPartitions`). Per transaction, `meta.rewards` is **`null`** for `full` encodings and omitted for `accounts` |
 
 ### 10.3 Reference quirks OnlyBlocks keeps (for byte-for-byte parity)
@@ -616,7 +638,7 @@ An implementation is **conformant** when `runner.py --impl <slug>` exits `0`.
   `blockhash` 32 × `1`.
 * A missing Rewards CID (absent from the slice) means empty rewards, not an error.
 * Legacy transactions with an empty metadata frame serialize as `"meta": null`
-  with no `version` key. A v0 transaction with an empty metadata frame gets
-  default metadata.
+  with no `version` key. Versioned (`v0` or `v1`) transactions with an empty
+  metadata frame get default metadata.
 * `loadedAddresses` is always present in `json`/`base64`/`base58` metadata,
   and absent in `jsonParsed` and `accounts`.
